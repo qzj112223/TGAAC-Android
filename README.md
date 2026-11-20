@@ -18,6 +18,12 @@ cd nx2android
 py -m porter port <你的游戏文件夹> -o out --vulkan-driver <turnip.so>
 ```
 
+
+## 应用内导入（本版新增）
+
+首次启动会显示中英双语**免费使用声明**；同意后如果没有游戏数据，点「选择游戏数据 ZIP」用系统文件选择器挑一个 ZIP，应用会自己解压到
+`/sdcard/Android/data/org.nx2a.t0100d7f00faaa000/files/` 再启动游戏。ZIP 里可以是 pack 文件夹本身（顶层一层目录会被自动剥掉），也可以直接是 `RomFS/` 和 `nx2a-data.json`。
+
 ## 安装
 
 1. 装 APK
