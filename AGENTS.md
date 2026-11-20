@@ -42,7 +42,7 @@ py -m porter port "E:\aiam" -o "E:\aiam\port-out" --experimental `
     --data-import --progress lines
 ```
 
-产出：`TheGreatAceAttorneyChronicles.apk`（27.7 MB）+ `TheGreatAceAttorneyChronicles-data/`（4.0 GB / 5,206 文件）。
+产出：`TheGreatAceAttorneyChronicles.apk`（27.7 MB）+ `TheGreatAceAttorneyChronicles-data/`（3.97 GiB / 4.27 GB，约 5,200 个文件）。
 
 **别踩的坑（都实测过）**
 - 不带 `--vulkan-driver` → APK 只有 4 MB，没有内置驱动，原厂 Adreno（Vulkan 1.1）会直接 abort
