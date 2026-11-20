@@ -97,18 +97,20 @@ py -m porter install TheGreatAceAttorneyChronicles-data --device <序列号>
 
 ```bash
 # 1) 取工具
-git clone https://github.com/shirai91/nx2android.git
+git clone https://github.com/shirai91/nx2android.git    # 网络不稳就多重试几次
 cd nx2android
 py -m pip install -r requirements.txt
 
 # 2) 先看这堆文件能不能被识别（可选）
 py -m porter inspect /path/to/game-folder
+#    未支持的游戏会打印 "no game profile ..." 并以退出码 1 结束，这是正常的，不是崩溃
 
 # 3) 生成 APK 和数据包
 py -m porter port /path/to/game-folder \
     -o out \
     -k /path/to/prod.keys \
-    --experimental          # 这个游戏尚未合入上游 profile，需要此开关
+    --experimental \
+    --vulkan-driver /path/to/vulkan.ad07xx.so     # ← 强烈建议带上，见下方说明
 ```
 
 跑完会得到：
@@ -118,8 +120,42 @@ out/TheGreatAceAttorneyChronicles.apk
 out/TheGreatAceAttorneyChronicles-data/      ← 约 4.0 GB，5206 个文件
 ```
 
-> 想直接用仓库里的 APK，只用 `-data` 目录也可以；
-> 想自己重编 APK 就带上 `--vulkan-driver <turnip.so>`（不带你也可以让 porter 用默认）。
+### 构建时的三个坑（实测过）
+
+**① 不带 `--vulkan-driver` 的 APK 只有 4 MB，它没有内置驱动**
+
+那样只能吃系统驱动。原厂 Adreno 驱动是 Vulkan 1.1，而这个移植需要 1.2+ 的 dynamic rendering，
+会直接 abort；只有刷了系统级 Turnip（或出厂就 ≥1.2 的新机型）才能跑。
+Turnip 驱动可以从 **本仓库 Release 的 APK 里取**：
+
+```bash
+# 从已发布的 APK 里解出驱动（16.4 MB）
+unzip -o TheGreatAceAttorneyChronicles.apk 'lib/arm64-v8a/libsysmem_vulkan.ad07xx.so' -d turnip
+py -m porter port /path/to/game-folder -o out -k prod.keys --experimental \
+    --vulkan-driver turnip/lib/arm64-v8a/libsysmem_vulkan.ad07xx.so
+```
+
+带驱动后 APK 约 27 MB，装上就能玩，不需要 root。
+
+**② 自己 survey 出来的 profile 缺两个贴图 key，3D 人物/道具会发黑**
+
+这个游戏把贴图拷进 CPU 缓存池后从不刷 cache。第一次 `porter port` 会在
+`<游戏目录>/<TITLE_ID>_build/profile/<TITLE_ID>/game.tsv` 生成一份 survey 出来的 profile，
+在其中补两行再跑一次：
+
+```
+tex_flush_upload	on
+tex_dirty_upload	on
+```
+
+（这两行已经在 [PR #476](https://github.com/shirai91/nx2android/pull/476) 里提给上游；合并后就不用管了。）
+
+**③ 上游 HEAD 还没有本次的移植层修复**
+
+本仓库的 APK 是在上游基础上带了 [PR #477](https://github.com/shirai91/nx2android/pull/477) 的修复的
+（内存池 256→254 MB、覆盖菜单重绘、fence 等待上限、底座模式触控）。
+直接从上游 clone 构建出来的是未修复版本：在这类机器上会掉到 2 fps、覆盖菜单会顿卡。
+想拿到同样的效果，就等 PR 合并，或者把那 8 个文件的改动自己打上去。
 
 ### 打成 ZIP（给应用内导入用）
 
