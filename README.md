@@ -45,10 +45,13 @@
 | 项 | 要求 |
 |---|---|
 | 系统 | **Android 10+**（minSdk 29，targetSdk 36），arm64-v8a |
-| GPU | **Adreno**（骁龙 6xx / 7xx / 8xx）——内置 Turnip 只支持 Adreno，Mali/PowerVR 跑不了 |
-| 存储 | 数据包约 **4.0 GB**（另需 4 GB 临时空间用于解压） |
-| 内存 | 建议 6 GB 以上（游戏堆约 3.1 GB） |
-| root | **不需要** |
+| GPU | **Adreno**。内置 Turnip 只支持 Adreno（本机实测 Adreno 650；Mali / PowerVR 用不了） |
+| 存储 | 数据包 **3.97 GiB / 4.27 GB**（约 5,200 个文件）；应用内导入时 ZIP 本身也在机内，合计需 **约 8.6 GB** 空闲 |
+| 内存 | 建议 6 GB 以上（实测游戏堆 3.14 GB、堆区 3.25 GB） |
+| root | **不需要**（驱动随 APK，应用内加载） |
+
+> 上表与后文的时间、性能数字，除标注「估算」外，都在 OPPO Pad（OPD2101 / 骁龙 870 / Adreno 650 / Android 15）上实测。
+
 
 ## 安装
 
@@ -66,7 +69,7 @@
 2. 检测不到数据时会显示「**选择游戏数据 ZIP**」
 3. 用系统文件选择器挑一个数据包 ZIP（见下方「自己生成数据包」）
 4. 应用自动解压到 `/sdcard/Android/data/org.nx2a.t0100d7f00faaa000/files/`，完成后自动进游戏
-   - 4 GB 的包解压大约 **10~20 分钟**，界面有文件数与 MB 计数，期间不要退出
+   - 实测 4,268,285,912 字节 / 约 5,200 个文件 **22 秒**解完（OPPO Pad，UFS），过程中显示文件数与 MB 数
 
 **方式 B：adb 推送（快）**
 
@@ -80,8 +83,6 @@ adb push TheGreatAceAttorneyChronicles-data/. /sdcard/Android/data/org.nx2a.t010
 py -m porter install TheGreatAceAttorneyChronicles-data --device <序列号>
 ```
 
-首次启动请记得给存储权限。
-
 ## 自己生成数据包（本仓库不提供）
 
 数据包必须由你**自己的** XCI / NSP dump 生成，工具是 [nx2Android](https://github.com/shirai91/nx2android)。
@@ -91,7 +92,7 @@ py -m porter install TheGreatAceAttorneyChronicles-data --device <序列号>
 1. **游戏本体**：XCI 或 NSP（你从自己主机 dump 的；`NSP` 目录里也可以放更新和 DLC）
 2. **密钥**：`prod.keys`（用 `Lockpick_RCM` 之类从自己的主机 dump；**不要**从网上下载别人的）
 3. **Python 3.11+**
-4. Windows / macOS / Linux 均可，Android 构建需要 **Android NDK**（脚本会自动找，缺失时按提示装）
+4. **Android NDK**（porter 自动找，缺失时会提示路径）。本流程在 **Windows 11 上实测**过；macOS / Linux 未实测
 
 ### 步骤
 
@@ -117,15 +118,16 @@ py -m porter port /path/to/game-folder \
 
 ```
 out/TheGreatAceAttorneyChronicles.apk
-out/TheGreatAceAttorneyChronicles-data/      ← 约 4.0 GB，5206 个文件
+out/TheGreatAceAttorneyChronicles-data/      ← 3.97 GiB（4.27 GB），约 5,200 个文件
 ```
 
 ### 构建时的三个坑（实测过）
 
 **① 不带 `--vulkan-driver` 的 APK 只有 4 MB，它没有内置驱动**
 
-那样只能吃系统驱动。原厂 Adreno 驱动是 Vulkan 1.1，而这个移植需要 1.2+ 的 dynamic rendering，
-会直接 abort；只有刷了系统级 Turnip（或出厂就 ≥1.2 的新机型）才能跑。
+那样只能吃系统驱动。原厂驱动在这台机器上实测是 `Adreno (TM) 650, Vulkan 1.1.128, driver 512.502.0`，
+启动即 `FATAL [vk] the device has neither dynamic rendering nor imageless ...` 并退出——移植按 Vulkan 1.3 选设备（源码里 `apiVersion >= VK_API_VERSION_1_3`）。
+所以要么刷系统级 Turnip，要么把驱动打进 APK（下面这条）。
 Turnip 驱动可以从 **本仓库 Release 的 APK 里取**：
 
 ```bash
@@ -135,7 +137,7 @@ py -m porter port /path/to/game-folder -o out -k prod.keys --experimental \
     --vulkan-driver turnip/lib/arm64-v8a/libsysmem_vulkan.ad07xx.so
 ```
 
-带驱动后 APK 约 27 MB，装上就能玩，不需要 root。
+带驱动后 APK 27.7 MB，装上即可运行（驱动在应用内加载，不需要 root）。
 
 **② 自己 survey 出来的 profile 缺两个贴图 key，3D 人物/道具会发黑**
 
@@ -169,7 +171,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 ```
 
 ```bash
-# macOS / Linux
+# macOS / Linux（zip 的 -0 = store；这条命令未在 Linux 上实测，PowerShell 那条已实测）
 cd out && zip -0 -r TheGreatAceAttorneyChronicles-data.zip TheGreatAceAttorneyChronicles-data
 ```
 
@@ -179,7 +181,7 @@ cd out && zip -0 -r TheGreatAceAttorneyChronicles-data.zip TheGreatAceAttorneyCh
 ## 操作
 
 - 顶部 **☰** 呼出覆盖菜单：显示手柄 / 透明度 / 编辑布局 / 震动 / 显示帧率 / 模式（掌机 ↔ 底座）/ 导出存档 / 导入存档 / 按键布局 / 音频输出 / 触屏操作 / 继续游戏
-- 「触屏操作」打开后，手指直接给游戏触摸屏（菜单按钮除外）；底座模式下同样可用
+- 「触屏操作」打开后，手指直接给游戏触摸屏（菜单按钮除外）；底座模式下按 1920×1080 屏幕映射（`DM_TOUCH_DOCKED`）
 - 菜单文案跟随系统语言（中文系统=中文，其它=英文），`env.txt` 里加 `DM_UI_LANG=zh|en` 可强制
 
 ## 已知情况 / 常见问题
@@ -188,7 +190,7 @@ cd out && zip -0 -r TheGreatAceAttorneyChronicles-data.zip TheGreatAceAttorneyCh
 |---|---|
 | **只有 30 fps** | 游戏引擎按固定 1/30 步进跑，GPU 只占 10~14 ms，余量很大——但帧闸门在引擎内部，改不了 |
 | 3D 人物/道具发黑 | 这个游戏把贴图拷进 CPU 缓存池后从不清 cache。已在其 profile 里加上 `tex_flush_upload` / `tex_dirty_upload` 解决（本版 APK/profile 已包含） |
-| 解压很久或失败 | 4 GB 解压 10~20 分钟属正常；失败时检查存储剩余空间（需 ≥ 8 GB 空闲） |
+| 解压失败 / 空间不够 | 实测 4.27 GB 解压 22 秒；失败通常是空间不足（ZIP 4.27 GB + 解压后 4.27 GB ≈ 需 8.6 GB 空闲）或 ZIP 不完整 |
 | 装了没图标/闪退 | 确认是 arm64 设备、Android 10+；卸载旧签名版本再装 |
 | 存档在哪 | 应用内 `/sdcard/Android/data/org.nx2a.t0100d7f00faaa000/files/saves`；也可用菜单「导出存档」导出到公共目录 |
 
@@ -251,7 +253,7 @@ py -m porter port "E:\aiam" -o "E:\aiam\port-out" --experimental `
     --data-import --progress lines
 ```
 
-产出：`TheGreatAceAttorneyChronicles.apk`（27.7 MB）+ `TheGreatAceAttorneyChronicles-data/`（4.0 GB / 5,206 文件）。
+产出：`TheGreatAceAttorneyChronicles.apk`（27.7 MB）+ `TheGreatAceAttorneyChronicles-data/`（3.97 GiB / 4.27 GB，约 5,200 个文件）。
 
 **别踩的坑（都实测过）**
 - 不带 `--vulkan-driver` → APK 只有 4 MB，没有内置驱动，原厂 Adreno（Vulkan 1.1）会直接 abort
