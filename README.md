@@ -210,118 +210,127 @@ cd out && zip -0 -r TheGreatAceAttorneyChronicles-data.zip TheGreatAceAttorneyCh
   - 底座模式触控映射到 1920×1080 屏幕像素
 - 游戏的 profile（常量、着色器表、两个贴图 key）：上游 PR [#476](https://github.com/shirai91/nx2android/pull/476)
 
-## 交给 Agent 打包分发（提示词）
+## 交给 Agent 生成数据包（提示词）
 
-想把产物（APK + 数据目录）整合成给别人下载的压缩包？把下面整段复制给 Claude Code / Codex / Alma 之类的 agent。
+数据包要自己从 dump 生成——把下面整段复制给 Claude Code / Codex / Alma 之类的 agent，它就知道该怎么跑、要验到什么程度。
 仓库根目录的 [`AGENTS.md`](AGENTS.md) 是同一份，支持该约定的 agent 会自动读到。
-它写清了：输入产物在哪、要产出哪两个包（单文件包 + 分卷包）、打包命令、四条红线、六条验收、最容易踩的四个坑。
+里面写了：目标产物、必须由你提供的输入（本体 + `prod.keys`）、带 `--vulkan-driver` 的完整命令、
+第一次生成后要补的两个贴图 key、ZIP 打包方式、九条验收标准，以及八种常见失败的判断方法。
 
 <details>
-<summary>展开：完整的打包分发提示词</summary>
+<summary>展开：完整的「生成数据包」提示词</summary>
 
-> 复制这一整篇给 coding agent。任务是**打包与分发**，不是继续改移植层。
+> 复制这一整篇给 coding agent。任务：用 [nx2Android](https://github.com/shirai91/nx2android) 的 `porter`，从**用户自己 dump 的游戏**生成这个移植需要的数据包（和能直接导入的 ZIP），并在设备上验证到「能进游戏、贴图正常」。
 
 
-### 一句话任务
+### 目标产物
 
-把构建产物（APK + 数据目录）整合成用户**下载 → 解压 → 三步就能玩**的压缩包，并且每一包都验证过。
+| 产物 | 说明 |
+|---|---|
+| `<Game>-data/` | 数据目录：**3.97 GiB / 约 5,200 文件**（RomFS、mods、env.txt、空 saves） |
+| `<Game>-data.zip` | **store 模式**（不压缩），给应用内导入用 |
+| `<Game>.apk` | 可选：27.7 MB，**内含 Turnip 驱动** |
+| 验证记录 | 启动日志关键行 + 至少一张游戏内截图 |
 
-### 输入（已存在，别重新构建）
+### 输入（必须由用户提供，agent 不得自行寻找或下载）
 
-| 产物 | 位置 | 大小 |
-|---|---|---|
-| APK（含 Turnip 驱动） | `E:\aiam\port-out\TheGreatAceAttorneyChronicles.apk` | 27.7 MB |
-| 数据目录 | `E:\aiam\port-out\TheGreatAceAttorneyChronicles-data\` | 3.97 GiB / 约 5,200 文件 |
-| 文档与脚本 | 仓库根目录 `README.md` / `DISCLAIMER.md` / `install-windows.bat` / `install.sh` | — |
+1. **游戏本体**：XCI 或 NSP —— 用户从自己的主机 dump
+2. **`prod.keys`** —— 用户从自己的主机 dump（`Lockpick_RCM` 之类）
+3. 放游戏的目录（含 `.xci` 或 `.nsp`，更新/DLC 可一并放在同目录）
+4. 环境：**Python 3.11+**、**Android NDK**（porter 自动找）、**JDK**（`d8` 需要）
 
-### 要产出的两个包
+> 拿不到 1/2 就停下来问，不要用网上找的 keys 或游戏文件。
 
-#### A. 单文件分发包（放网盘）
+### 步骤（全部实测过）
 
-```
-TGAAC-Android-v1.0.0.zip
-└─ TGAAC-Android-v1.0.0/
-   ├─ TheGreatAceAttorneyChronicles.apk
-   ├─ data/TheGreatAceAttorneyChronicles-data.zip      4.27 GB（store，不压缩）
-   ├─ README.md
-   ├─ DISCLAIMER.md
-   ├─ install-windows.bat
-   ├─ install.sh
-   └─ SHA256SUMS.txt
-```
-
-```powershell
-# 数据包（必须是 store：RomFS 已压缩过，Deflate 只是白烧 CPU）
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-[System.IO.Compression.ZipFile]::CreateFromDirectory(
-  "E:\aiam\port-out\TheGreatAceAttorneyChronicles-data",
-  "E:\aiam\dist\data\TheGreatAceAttorneyChronicles-data.zip",
-  [System.IO.Compression.CompressionLevel]::NoCompression, $true)
-
-# 校验清单（UTF-8 无 BOM，sha256sum 能直接 -c）
-Get-FileHash ... -Algorithm SHA256
-```
-
-#### B. 分卷包（只能放 GitHub Release 之外的私链；见红线 1）
-
-每卷 < 1.9 GB（GitHub 单文件上限 2 GB，留余量），固定命名 `part-aa/ab/ac…`：
-
-```powershell
-7z a -mx0 -v1700m TheGreatAceAttorneyChronicles-data.7z "E:\aiam\port-out\TheGreatAceAttorneyChronicles-data"
-# 或对已有 zip 分卷：split -b 1700M（WSL/Git Bash）
-```
-
-同时给出合并脚本，两个平台都要：
-
-```bat
-:: join-windows.bat
-copy /b part-aa + part-ab + part-ac TheGreatAceAttorneyChronicles-data.zip
-```
+#### 1. 取工具
 
 ```bash
-# join.sh
-cat part-aa part-ab part-ac > TheGreatAceAttorneyChronicles-data.zip
+git clone https://github.com/shirai91/nx2android.git      # 握手失败就多重试几次
+cd nx2android
+py -m pip install -r requirements.txt
 ```
+
+#### 2. 先看能不能识别
+
+```bash
+py -m porter inspect /path/to/game-folder
+```
+
+未支持的游戏会打印 `no game profile for <TITLE_ID>` 并以**退出码 1** 结束——这是正常的，不是崩溃，下一步加 `--experimental` 即可。
+
+#### 3. 生成（**必须带 `--vulkan-driver`**）
+
+```powershell
+$env:JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'; $env:PATH="$env:JAVA_HOME\bin;$env:PATH"
+py -m porter port /path/to/game-folder -o out -k /path/to/prod.keys --experimental `
+    --vulkan-driver path/to/vulkan.ad07xx.so --progress lines
+```
+
+- **不带 `--vulkan-driver`**：APK 只有 3.96 MB、没有内置驱动。原厂 Adreno 实测 `Vulkan 1.1.128`，启动即 `FATAL [vk] the device has neither dynamic rendering nor imageless ...` 退出
+- 驱动从哪来：本仓库 Release 的 APK 里解出 `lib/arm64-v8a/libsysmem_vulkan.ad07xx.so`（16.36 MB）
+- 忘了设 `JAVA_HOME` → `d8.bat exit code 1 / JAVA_HOME is not set`
+
+#### 4. 补两个贴图 key（第一次生成后**必做**）
+
+第一次 `porter port` 会在 `<游戏目录>/<TITLE_ID>_build/profile/<TITLE_ID>/game.tsv` 生成一份 survey 出来的 profile，往里面加两行：
+
+```
+tex_flush_upload	on
+tex_dirty_upload	on
+```
+
+再跑一次同样的命令（会复用这份 profile，日志里能看到 `reusing the provisional profile`）。
+
+不补的后果：这个游戏把贴图拷进 CPU 缓存池后从不刷 cache → **3D 人物和道具全黑**（背景和 UI 正常，很容易以为是驱动问题）。
+
+#### 5. 打成 ZIP（给应用内导入）
+
+```powershell
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+[System.IO.Compression.ZipFile]::CreateFromDirectory(
+  "out/<Game>-data", "out/<Game>-data.zip",
+  [System.IO.Compression.CompressionLevel]::NoCompression, $true)
+```
+
+- 必须 **store**：RomFS 里的资源本来就压过了，Deflate 只是白烧 CPU（实测 store 解压 4.27 GB 只要 **22 秒**）
+- 顶层目录保持 `<Game>-data/`，应用内导入会自动剥掉这一层
+
+### 验收（逐条对比）
+
+| 检查 | 通过标准 |
+|---|---|
+| 数据目录 | 3.97 GiB（4.27 GB）/ 约 5,200 个文件 |
+| APK | 27.7 MB，含 `lib/arm64-v8a/libsysmem_vulkan.ad07xx.so`（16.36 MB） |
+| 安装 | `adb install -r` 成功，图标名正确 |
+| 启动 | 首次弹免费使用声明 → 检测到数据 → 自动进游戏 |
+| 驱动 | 日志 `[vk] GPU Turnip Adreno ... Vulkan 1.3.x, driver 25.99.99` |
+| 错误 | 日志里 `[RED]` 计数为 **0** |
+| 画面 | 进第一章 3D 场景，人物/道具**不发黑** |
+| 帧率 | 覆盖层稳定 **30.0 fps**（引擎固定 1/30，属预期） |
+| 导入 | 应用内选这个 ZIP → 解压完成 → 进游戏 |
+
+日志路径：`/sdcard/Android/data/<包名>/files/log.txt`
 
 ### 红线
 
-1. **含游戏 RomFS 的数据包不能进公开 GitHub 仓库或 Release** —— GitHub 上只发 APK（27.7 MB），数据包走网盘/私链
-2. **不许打包** `prod.keys` / `title.keys` / NSP / XCI / 任何密钥文件
-3. 压缩一律 **store / -mx0**，别用默认 Deflate
-4. 数据包顶层目录必须正好是 `TheGreatAceAttorneyChronicles-data/`（应用内导入会自动剥掉这一层，多一层少一层都会 `hasData()` 失败）
-5. 每个包都带 `SHA256SUMS.txt`；文件名带版本号，不覆盖旧版本
+1. 不许下载或使用别人的 `prod.keys`、游戏 dump、预打包数据包
+2. 不许把游戏数据、keys、XCI/NSP 提交进任何 git 仓库
+3. 报告里可以写路径和命令，**keys 一律不写**
+4. 数据包内容不对就重跑，不要手改 RomFS 里的文件
 
-### 验收（一条条跑，别跳）
+### 常见失败与判断
 
-1. 解压单文件包 → APK、data zip、文档齐全
-2. `sha256sum -c SHA256SUMS.txt` 全部 OK
-3. 平板上装 APK → 首次启动弹免费使用声明 → 选数据 ZIP → 自动解压 → 进游戏
-   （实测参考：4.27 GB / 约 5,200 文件 **22 秒**解完，OPPO Pad UFS）
-4. 分卷版：合并后 sha256 与单文件版**完全一致**，且同样能导入
-5. 只照 `README.md` 的三步（装 APK / 选 ZIP / 进游戏）能从零玩起来，不需要别的资料
-6. 包内搜一遍：无 `*.keys`、无 `*.nsp`、无 `*.xci`
-
-### 环境（实测）
-
-| 项 | 值 |
+| 现象 | 原因 |
 |---|---|
-| 系统 | Windows 11 + PowerShell 7 |
-| 7-Zip | `C:\Program Files\UotanToolbox\Bin\7z\7za.exe`（或系统装的 `7z.exe`） |
-| 平板 | OPPO Pad（OPD2101），adb 序列号 `cbf19295`，屏幕常亮用 `svc power stayon true` |
-| 免费空间 | 单文件包 + 数据包中间产物，E: 至少留 **12 GB** |
-| 平板空间 | 导入时 ZIP 4.27 GB + 解压后 4.27 GB，需 **约 8.6 GB** 空闲 |
-
-### 最容易踩的四个坑
-
-1. 用 Deflate 压 4 GB → 半小时起步，还没意义
-2. 分卷做成 > 2 GB → GitHub 直接拒收
-3. 分卷合并顺序错 / 命名不固定 → zip 打不开（用 `part-aa`、`part-ab`，别用 `part1`、`part10`）
-4. 顶层目录多套了一层（`xxx/TheGreatAceAttorneyChronicles-data/...` 之外的再套一层）→ 导入后找不到 RomFS
-
-### 交付
-
-- 产出清单（文件名 + 大小 + sha256）写进 Release 说明或网盘分享页
-- 分卷说明里必须写清「怎么合并、怎么校验」，否则用户只能干瞪眼
+| `d8.bat exit code 1` + `JAVA_HOME is not set` | 没设 `JAVA_HOME`（指 JBR） |
+| `inspect` 退出码 1 | 未支持的游戏，正常 |
+| 数据目录只有几 MB | keys 不对或目录里没有本体，RomFS 没解出来 |
+| APK 3.96 MB | 漏了 `--vulkan-driver` |
+| 3D 人物/道具发黑 | 漏了那两个贴图 key |
+| 只有 2 fps | 用的是上游未修版本（内存池 256 MB），需 PR #477 的修复 |
+| `git clone` 握手失败 | 网络/代理，重试 |
+| 存档读不到 | 数据包要来自**同一版本**的游戏（本体版本别混用） |
 
 </details>
 
