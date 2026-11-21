@@ -6,6 +6,8 @@
 
 > 本项目是从自己 dump 的 Switch 卡带生成的 **原生移植**：不是模拟器，游戏逻辑直接在本机跑，渲染走 Vulkan。
 
+> **最新版：[v1.1.0](../../releases/tag/v1.1.0)** —— 新增触屏操作、中文界面、菜单跟手、内存池分块探测。
+
 **本仓库只包含构建好的 APK 和脚本，不包含任何游戏数据、密钥或反编译产物。**
 
 ---
@@ -189,7 +191,8 @@ cd out && zip -0 -r TheGreatAceAttorneyChronicles-data.zip TheGreatAceAttorneyCh
 ## 操作
 
 - 顶部 **☰** 呼出覆盖菜单：显示手柄 / 透明度 / 编辑布局 / 震动 / 显示帧率 / 模式（掌机 ↔ 底座）/ 导出存档 / 导入存档 / 按键布局 / 音频输出 / 触屏操作 / 继续游戏
-- 「触屏操作」打开后，手指直接给游戏触摸屏（菜单按钮除外）；底座模式下按 1920×1080 屏幕映射（`DM_TOUCH_DOCKED`）
+- 「触屏操作」打开后，手指直接给游戏的触摸屏（覆盖菜单自己的按钮仍然优先）；底座模式下按**画面矩形**映射，点到哪儿就是哪儿
+  （`DM_TOUCH_DOCKED=screen` 才回到按 1920×1080 屏幕坐标映射的老行为）
 - 菜单文案跟随系统语言（中文系统=中文，其它=英文），`env.txt` 里加 `DM_UI_LANG=zh|en` 可强制
 
 ## 已知情况 / 常见问题
@@ -199,6 +202,7 @@ cd out && zip -0 -r TheGreatAceAttorneyChronicles-data.zip TheGreatAceAttorneyCh
 | **只有 30 fps** | 游戏引擎按固定 1/30 步进跑，GPU 只占 10~14 ms，余量很大——但帧闸门在引擎内部，改不了 |
 | 3D 人物/道具发黑 | 这个游戏把贴图拷进 CPU 缓存池后从不清 cache。已在其 profile 里加上 `tex_flush_upload` / `tex_dirty_upload` 解决（本版 APK/profile 已包含） |
 | 解压失败 / 空间不够 | 实测 4.27 GB 解压 22 秒；失败通常是空间不足（ZIP 4.27 GB + 解压后 4.27 GB ≈ 需 8.6 GB 空闲）或 ZIP 不完整 |
+| 菜单文字是英文 | 跟随系统语言：中文系统就是中文；也可在 `env.txt` 加 `DM_UI_LANG=zh` 强制 |
 | 装了没图标/闪退 | 确认是 arm64 设备、Android 10+；卸载旧签名版本再装 |
 | 存档在哪 | 应用内 `/sdcard/Android/data/org.nx2a.t0100d7f00faaa000/files/saves`；也可用菜单「导出存档」导出到公共目录 |
 
