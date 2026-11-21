@@ -1,6 +1,10 @@
 # The Great Ace Attorney Chronicles 1&2 — Android 原生移植
 
-> 用 [nx2Android](https://github.com/shirai91/nx2android) 的工具，从自己 dump 的 Switch 卡带生成的 **原生移植**（不是模拟器：游戏逻辑直接在本机跑，渲染走 Vulkan）。
+> 🎉 **感谢 [nx2Android](https://github.com/shirai91/nx2android)** —— 本移植完全由它的 `porter` 工具链生成，没有它就没有这个项目。
+> 上游把 Switch 游戏的 ARM64 代码翻译成 C、补上 Horizon 系统服务与 Maxwell GPU 的兼容层，并把整套工具链开源（MIT），
+> 让「自己 dump、自己生成、自己玩」成为可能。感谢作者与所有贡献者：**<https://github.com/shirai91/nx2android>**
+
+> 本项目是从自己 dump 的 Switch 卡带生成的 **原生移植**：不是模拟器，游戏逻辑直接在本机跑，渲染走 Vulkan。
 
 **本仓库只包含构建好的 APK 和脚本，不包含任何游戏数据、密钥或反编译产物。**
 
