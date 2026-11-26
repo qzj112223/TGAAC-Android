@@ -1,20 +1,436 @@
+<div align="center">
+
 # The Great Ace Attorney Chronicles 1&2 — Android 原生移植
 
-> 🎉 **感谢 [nx2Android](https://github.com/shirai91/nx2android)** —— 本移植完全由它的 `porter` 工具链生成，没有它就没有这个项目。
-> 上游把 Switch 游戏的 ARM64 代码翻译成 C、补上 Horizon 系统服务与 Maxwell GPU 的兼容层，并把整套工具链开源（MIT），
-> 让「自己 dump、自己生成、自己玩」成为可能。感谢作者与所有贡献者：**<https://github.com/shirai91/nx2android>**
+**Switch 版《大逆转裁判 1&2》的 Android 原生重编译移植（非模拟器 · Vulkan 渲染）**
 
-> 本项目是从自己 dump 的 Switch 卡带生成的 **原生移植**：不是模拟器，游戏逻辑直接在本机跑，渲染走 Vulkan。
+*Native Android recompilation port of The Great Ace Attorney Chronicles (Switch), powered by [nx2Android](https://github.com/shirai91/nx2android).*
 
-> **最新版：[v1.3.0](../../releases/tag/v1.3.0)** —— 暂停菜单新增「**60 帧模式**」开关：在线切换、速度 1:1，**掌机 720p 在三台实测设备上都能满 60**（含天玑 900 / Mali-G68）；底座 1080p 上 Adreno 830 也是满 60，Adreno 650 与 Mali-G68 约 40~50。同时修复天玑 / Mali 的整屏黑闪、章节标题卡黑屏、视频停播后无声、底座触控无反应。
->
-> 完整更新记录见 [CHANGELOG.md](CHANGELOG.md)。
+[![Latest Release](https://img.shields.io/github/v/release/qzj112223/TGAAC-Android?label=Release&color=blue)](../../releases/tag/v1.3.0)
+[![Platform](https://img.shields.io/badge/Android-10%2B%20%7C%20arm64--v8a-3DDC84?logo=android&logoColor=white)](#环境要求与兼容性)
+[![Upstream](https://img.shields.io/badge/Toolchain-nx2Android%20(MIT)-black?logo=github)](https://github.com/shirai91/nx2android)
+[![Issues](https://img.shields.io/github/issues/qzj112223/TGAAC-Android?label=Issues)](https://github.com/qzj112223/TGAAC-Android/issues)
 
-**本仓库只包含构建好的 APK 和脚本，不包含任何游戏数据、密钥或反编译产物。**
+[快速开始](#快速开始) · [环境要求](#环境要求与兼容性) · [性能实测](#性能实测60-帧) · [自己生成数据包](#自己生成数据包本仓库不提供) · [常见问题](#常见问题) · [更新日志](CHANGELOG.md)
+
+</div>
+
+> **⚠️ 重要声明：本仓库只包含构建好的 APK 和脚本，不包含任何游戏数据、密钥或反编译产物。**
+> 使用前请先阅读文末的 [免责声明 / Disclaimer](#免责声明--disclaimer)。
+
+> 🎉 **致谢上游 [nx2Android](https://github.com/shirai91/nx2android)** —— 本移植完全由其开源的 `porter` 工具链（MIT）生成：将 Switch 的 ARM64 代码静态重编译为原生程序，并提供 Horizon 系统服务与 Maxwell GPU 的 Vulkan 兼容层，让「自己 dump、自己生成、自己玩」成为可能。
+
+> **最新版 [v1.3.0](../../releases/tag/v1.3.0)**：暂停菜单新增「**60 帧模式**」在线开关（速度 1:1，掌机 720p 在三台实测机型上均可满 60，含天玑 900 / Mali-G68；底座 1080p 上 Adreno 830 满 60，Adreno 650 与 Mali-G68 约 40~50），并修复天玑/Mali 整屏黑闪、章节标题卡黑屏、视频停播无声与底座触控问题。详见 [CHANGELOG.md](CHANGELOG.md)。
 
 ---
 
-## ⚠️ 免责声明 / Disclaimer
+## 目录
+
+- [核心特性](#核心特性)
+- [实机截图](#实机截图)
+- [快速开始](#快速开始)
+- [环境要求与兼容性](#环境要求与兼容性)
+- [性能实测（60 帧）](#性能实测60-帧)
+- [操作与覆盖菜单](#操作与覆盖菜单)
+- [自己生成数据包（本仓库不提供）](#自己生成数据包本仓库不提供)
+  - [第一部分：自己动手做](#第一部分自己动手做)
+  - [第二部分：交给 Agent 做（提示词）](#第二部分交给-agent-做提示词)
+- [常见问题](#常见问题)
+- [技术细节](#技术细节)
+- [免责声明 / Disclaimer](#免责声明--disclaimer)
+- [致谢与许可证](#致谢与许可证)
+
+---
+
+## 核心特性
+
+- **原生重编译，非模拟器**：游戏 ARM64 逻辑转译为 C 并编译为 Android `arm64-v8a` 原生代码，图形走 Vulkan。
+- **在线 60 帧模式（1:1 速度）**：暂停菜单「游戏」页一键切换 30↔60 fps，无需重启；仅抬高渲染上限 `sApp.mMaxFps`，逻辑基准 `mFps` 保持 30，打字、自动播放、转场与镜头速度完全 1:1。
+- **Adreno 与 Mali 双平台可用**：系统驱动满足要求的设备（如 Adreno 830、Mali-G68）直走系统驱动；旧款 Vulkan 1.1 Adreno（如 Adreno 650）自动使用 APK 内置的 Turnip 驱动，无需 root。
+- **免存储权限应用内导入**：首次启动通过系统文件选择器直接导入数据包 ZIP，无需 `MANAGE_EXTERNAL_STORAGE` / `READ_EXTERNAL_STORAGE` 权限。
+- **完整的移动端交互**：内置可编辑虚拟手柄、触控透传（支持掌机与底座模式）、实时帧率/温度/帧时图覆盖层、中英双语菜单，以及应用内一键存档导出/导入。
+
+---
+
+## 实机截图
+
+> *截图占位：欢迎补充实机画面（将图片放入 `docs/screenshots/` 后替换下方占位即可）。*
+
+| 标题 / 实机画面（60 fps 覆盖层） | 暂停菜单（游戏页 · 60 帧模式开关） | 布局编辑器 / 触控输入 |
+| :---: | :---: | :---: |
+| *待补充（`docs/screenshots/gameplay_60fps.png`）* | *待补充（`docs/screenshots/menu_game_tab.png`）* | *待补充（`docs/screenshots/layout_editor.png`）* |
+
+---
+
+## 快速开始
+
+30 秒上手流程：**装 APK → 放数据 → 开玩**。
+
+### 第 1 步：安装 APK
+
+从 [Releases](../../releases) 下载 `TheGreatAceAttorneyChronicles.apk`（约 27.8 MiB / 29.2 MB）并安装。
+
+> APK 使用自签名证书；若此前安装过不同签名的版本，请先在菜单「导出存档」备份，再卸载重装。
+
+### 第 2 步：导入游戏数据（二选一）
+
+数据包需由你自己的主机 dump 生成，见 [自己生成数据包](#自己生成数据包本仓库不提供)。
+
+#### 方式 A：应用内导入（推荐，无需电脑）
+
+1. 首次启动弹出**免费使用声明** → 点击「知悉并继续」。
+2. 未检测到数据时出现「**选择游戏数据 ZIP**」→ 通过系统文件选择器选中你的数据包 ZIP。
+3. 应用自动解压到 `/sdcard/Android/data/org.nx2a.t0100d7f00faaa000/files/`，完成后自动进入游戏。
+   - 实测 `4,268,285,912` 字节 / 约 5,200 个文件在 OPPO Pad（UFS）上 **22 秒** 解压完成，界面实时显示文件数与 MB 数。
+
+> **无需存储权限**：数据保存在应用私有外部目录 `Android/data/<包名>/files`，系统文件选择器无需 `MANAGE_EXTERNAL_STORAGE` 或 `READ_EXTERNAL_STORAGE`（已实测两项均未授予时正常导入并启动）。仅当使用 `porter install --romfs-at /sdcard/...` 将 RomFS 放到公共目录时才需要「所有文件访问」权限。
+
+#### 方式 B：电脑 `adb` 或 `porter` 推送
+
+```bash
+# adb 直接推送数据目录
+adb push TheGreatAceAttorneyChronicles-data/. /sdcard/Android/data/org.nx2a.t0100d7f00faaa000/files/
+```
+
+```bash
+# 或用 porter 一步到位（同时安装 APK）
+py -m porter install TheGreatAceAttorneyChronicles-data --device <序列号>
+```
+
+### 第 3 步：开玩
+
+数据就绪后启动即进游戏。点击屏幕顶部 **☰** 打开暂停菜单，可按需开启「**60 帧模式**」、切换「**掌机 / 底座**」分辨率或开启「**触控输入**」。
+
+---
+
+## 环境要求与兼容性
+
+| 项目 | 要求 / 实测说明 |
+|---|---|
+| **系统** | **Android 10+**（`minSdk 29`，`targetSdk 36`），`arm64-v8a` |
+| **GPU 与驱动** | **Adreno 或 Mali 均可运行**（实测：Adreno 650 / Adreno 830 / Mali-G68）。<br>• **Adreno 830 与 Mali**：直接走**系统驱动**，不需要 Turnip（Mali-G68 / Vulkan 1.1.177 实测 30 fps，掌机 720p 可满 60）。<br>• **旧款 Vulkan 1.1 Adreno（如 Adreno 650）**：系统驱动缺少 `dynamic rendering` 与 `imageless framebuffer + render pass 2`，使用 APK 内置的 Turnip 驱动即可。<br>• PowerVR / Xclipse：**未实测**。 |
+| **存储空间** | 数据包 **3.97 GiB（4.27 GB）**、约 5,200 个文件；使用应用内 ZIP 导入时压缩包与解压目录同时在机内，合计需 **约 8.6 GB** 空闲空间 |
+| **内存** | 实测在 **8 GB 及以上** 设备正常运行（实测游戏堆 `3.14 GB`、堆区 `3.25 GB`）；4 GB / 6 GB 设备 **未实测** |
+| **Root** | **不需要**（Turnip 驱动随 APK 打包并在应用内加载） |
+
+> 除明确标注「未实测」或「估算」的项目外，本文所有时间与性能数据均来自以下三台真机实测：
+> - **OPPO Pad（OPD2101）**：骁龙 870 / Adreno 650 / Android 15（Turnip）
+> - **红米（骁龙 8 Elite 级）**：Adreno 830 / Vulkan 1.3.284（系统驱动）
+> - **荣耀 Play5 活力版**：天玑 900 / Mali-G68 / Android 12 / Vulkan 1.1.177（系统驱动）
+
+---
+
+## 性能实测（60 帧）
+
+测试条件：暂停菜单打开「**60 帧模式**」，各设备使用各自存档与场景（窗口 30~250 秒不等）。
+
+| 设备 | GPU / 驱动 | 模式与分辨率 | frame p50 | frame p95 | GPU p50 | 掉帧 |
+|---|---|---|---:|---:|---:|---:|
+| 红米（骁龙 8 Elite 级） | Adreno 830（系统驱动） | 底座 1080p（第一章实机） | **16.67 ms** | 18.20 ms | 3.0 ms | 1 / 7,800 |
+| OPPO Pad OPD2101 | Adreno 650（内置 Turnip） | 掌机 720p | **16.6 ms** | ~18 ms | 13.9 ms | 0 |
+| 荣耀 Play5 活力版 | Mali-G68 / 天玑 900（系统驱动） | 掌机 720p | **16.66 ms** | 17.54 ms | 14.1 ms | 16 / 15,300（250 秒） |
+| 荣耀 Play5 活力版 | Mali-G68 / 天玑 900（系统驱动） | 底座 1080p | 24.9 ms（~40 fps） | 26.7 ms | 22.9 ms | 1,831 / 3,900 |
+
+> - **结论**：能否跑满 60 帧主要取决于**分辨率**而非芯片档位 —— 1080p 像素数是 720p 的 2.25 倍。同一台天玑 900 掌机 720p 可稳定 60，底座 1080p 约 40 fps；OPPO Pad 底座 1080p 约 50 fps（GPU 17.1 ms）。
+> - 关闭「60 帧模式」时，行为与 v1.2.0 完全一致（默认 30 fps）。
+
+---
+
+## 操作与覆盖菜单
+
+点击屏幕顶部 **☰** 呼出覆盖菜单（底部「继续游戏」关闭菜单），共四个页签：
+
+| 页签 | 菜单项 |
+|---|---|
+| **手柄** | 显示手柄 / 透明度 / 编辑布局 / 震动 / 触控输入 / 按键布局 / 音频输出 |
+| **游戏** | 显示帧率 / 超级分辨率 / 锐度 / 模式（掌机 ↔ 底座） / **60 帧模式** / 导出存档 / 导入存档 |
+| **计数** | 帧率行 / SoC 行 / 电量行 / 驱动行 / 帧时图 |
+| **样式** | 位置 / 颜色 / 描边 / 大小 |
+
+- **60 帧模式**：**在线生效**，无需重启；状态写入 `settings.txt` 的 `fps60=`，下次启动自动保留。仅将渲染上限 `sApp.mMaxFps` 提升至 60、逻辑步进 `mFps` 维持 30，引擎时间缩放比自动为 0.5，演出与操作速度保持 1:1。
+- **触控输入**：开启后触摸事件直接透传给游戏触摸屏（覆盖菜单按钮仍优先）。底座模式下默认按 1920×1080 主机屏幕像素映射（`env.txt` 设置 `DM_TOUCH_DOCKED=screen` 时切回 1280×720 面板坐标）。
+- **界面语言**：自动跟随系统语言（中文系统显示中文，其余显示英文）；可在 `env.txt` 中添加 `DM_UI_LANG=zh` 或 `DM_UI_LANG=en` 强制指定。
+
+---
+
+## 自己生成数据包（本仓库不提供）
+
+数据包必须由你**自己的** Switch XCI / NSP dump 通过 [nx2Android](https://github.com/shirai91/nx2android) 生成。下面提供两种方式：
+
+- **第一部分**：自己按命令一步步执行（透明可控）
+- **第二部分**：把完整提示词交给 Claude Code / Codex / Alma 等 coding agent 自动完成并验收
+
+### 第一部分：自己动手做
+
+#### 准备条件
+
+1. **游戏本体**：从自己主机 dump 的 XCI 或 NSP（更新与 DLC 可放在同一目录）
+2. **密钥**：`prod.keys`（使用 `Lockpick_RCM` 等工具从自己主机 dump，**切勿**从网络下载）
+3. **Python 3.11+**
+4. **Android NDK**（`porter` 会自动检测，缺失时提示路径）。本流程已在 **Windows 11** 实测通过；macOS / Linux **未实测**
+
+#### 构建步骤
+
+```bash
+# 1) 获取工具链
+git clone https://github.com/shirai91/nx2android.git    # 网络不稳可重试
+cd nx2android
+py -m pip install -r requirements.txt
+
+# 2) 检查游戏目录能否识别（可选）
+py -m porter inspect /path/to/game-folder
+#    未支持的游戏会打印 "no game profile ..." 并以退出码 1 结束，属正常现象
+
+# 3) 生成 APK 与数据包
+py -m porter port /path/to/game-folder \
+    -o out \
+    -k /path/to/prod.keys \
+    --experimental \
+    --vulkan-driver /path/to/vulkan.ad07xx.so     # 旧款 Adreno 需带上；Adreno 830 / Mali 走系统驱动可省略
+```
+
+构建产物：
+
+```text
+out/TheGreatAceAttorneyChronicles.apk
+out/TheGreatAceAttorneyChronicles-data/      ← 3.97 GiB（4.27 GB），约 5,200 个文件
+```
+
+#### 构建时的三个注意事项（实测总结）
+
+**① 何时需要 `--vulkan-driver`**
+
+- 不带 `--vulkan-driver` 打出的 APK 约 4 MB（无内置驱动），完全依赖系统驱动。
+- **Adreno 830 与 Mali 设备不受影响**：系统驱动已满足要求（例如 Mali-G68 报 `Vulkan 1.1.177` 且支持 `imageless framebuffer`），不带驱动照常运行。
+- **旧款 Vulkan 1.1 Adreno（如 Adreno 650）**：原厂驱动（实测 `Adreno (TM) 650, Vulkan 1.1.128, driver 512.502.0`）既不支持 `dynamic rendering` 也不支持 `imageless framebuffer + render pass 2`，会报 `FATAL [vk] the device has neither dynamic rendering nor imageless ...` 退出。（源码中的 `apiVersion >= VK_API_VERSION_1_3` 仅用于校验外置 `DM_VK_DRIVER` 驱动是否匹配设备，与系统驱动路径无关。）
+- 可直接从本仓库 Release 的 APK 中提取内置 Turnip 驱动（`16.36 MiB`）：
+
+```bash
+unzip -o TheGreatAceAttorneyChronicles.apk 'lib/arm64-v8a/libsysmem_vulkan.ad07xx.so' -d turnip
+py -m porter port /path/to/game-folder -o out -k prod.keys --experimental \
+    --vulkan-driver turnip/lib/arm64-v8a/libsysmem_vulkan.ad07xx.so
+```
+
+带驱动后的 APK 约 **27.8 MiB（29.2 MB）**，应用内加载，无需 root。
+
+**② 自行 survey 生成的 profile 需确认两个贴图 key**
+
+该游戏将贴图拷贝至 CPU 缓存池后不会主动刷新 cache，缺少以下配置会导致 **3D 人物与道具发黑**。若使用旧版工具或自行 survey 生成了 `<游戏目录>/<TITLE_ID>_build/profile/<TITLE_ID>/game.tsv`，请在其中补上两行并重新运行 `porter port`：
+
+```tsv
+tex_flush_upload	on
+tex_dirty_upload	on
+```
+
+（这两行已随 [PR #476](https://github.com/shirai91/nx2android/pull/476) 合入上游主线。）
+
+**③ 上游主线与本仓库 APK 的修复差异**
+
+早期 `#477`（已关闭未合并）的改动已拆分为 [PR #492](https://github.com/shirai91/nx2android/pull/492) / [#493](https://github.com/shirai91/nx2android/pull/493) / [#494](https://github.com/shirai91/nx2android/pull/494) 合入上游主线。本仓库 v1.3.0 APK 额外包含了仍在等待上游合并的修复与特性（`#531 / #551 / #552 / #553 / #554 / #642 / #650 / #652`），见 [技术细节](#技术细节)。
+
+#### 打包为 ZIP（供应用内导入）
+
+```powershell
+# Windows PowerShell（已实测）
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+[System.IO.Compression.ZipFile]::CreateFromDirectory(
+  "out/TheGreatAceAttorneyChronicles-data",
+  "out/TheGreatAceAttorneyChronicles-data.zip",
+  [System.IO.Compression.CompressionLevel]::NoCompression, $true)
+```
+
+```bash
+# macOS / Linux（-0 = store；未在 Linux 上实测）
+cd out && zip -0 -r TheGreatAceAttorneyChronicles-data.zip TheGreatAceAttorneyChronicles-data
+```
+
+- 务必使用 **不压缩（store）**：RomFS 资源本身已压缩，Deflate 只会白耗 CPU 与时间。
+- 顶层目录保留 `TheGreatAceAttorneyChronicles-data/` 即可，应用内导入会自动剥离这一层。
+
+### 第二部分：交给 Agent 做（提示词）
+
+将下方整段提示词复制给 Claude Code / Codex / Alma 等 coding agent 即可按标准自动构建并验收。仓库根目录的 [`AGENTS.md`](AGENTS.md) 是同一份说明，支持该约定的 agent 会自动读取。
+
+<details>
+<summary>展开：完整的「生成数据包」Agent 提示词</summary>
+
+> 复制这一整篇给 coding agent。任务：用 [nx2Android](https://github.com/shirai91/nx2android) 的 `porter`，从**用户自己 dump 的游戏**生成这个移植需要的数据包（和能直接导入的 ZIP），并在设备上验证到「能进游戏、贴图正常」。
+
+#### 目标产物
+
+| 产物 | 说明 |
+|---|---|
+| `<Game>-data/` | 数据目录：**3.97 GiB（4.27 GB） / 约 5,200 文件**（RomFS、mods、env.txt、空 saves） |
+| `<Game>-data.zip` | **store 模式**（不压缩），给应用内导入用 |
+| `<Game>.apk` | 可选：约 27.8 MiB（29.2 MB），**内含 Turnip 驱动**（16.36 MiB） |
+| 验证记录 | 启动日志关键行 + 至少一张游戏内截图 |
+
+#### 输入（必须由用户提供，agent 不得自行寻找或下载）
+
+1. **游戏本体**：XCI 或 NSP —— 用户从自己的主机 dump
+2. **`prod.keys`** —— 用户从自己的主机 dump（`Lockpick_RCM` 之类）
+3. 放游戏的目录（含 `.xci` 或 `.nsp`，更新/DLC 可一并放在同目录）
+4. 环境：**Python 3.11+**、**Android NDK**（porter 自动找）、**JDK**（`d8` 需要）
+
+> 拿不到 1/2 就停下来问，不要用网上找的 keys 或游戏文件。
+
+#### 步骤（全部在 Windows 11 实测过）
+
+##### 1. 取工具
+
+```bash
+git clone https://github.com/shirai91/nx2android.git      # 握手失败就多重试几次
+cd nx2android
+py -m pip install -r requirements.txt
+```
+
+##### 2. 先看能不能识别
+
+```bash
+py -m porter inspect /path/to/game-folder
+```
+
+未支持的游戏会打印 `no game profile for <TITLE_ID>` 并以**退出码 1** 结束——这是正常的，不是崩溃，下一步加 `--experimental` 即可。
+
+##### 3. 生成（旧款 Adreno 需带 `--vulkan-driver`；Adreno 830 / Mali 走系统驱动可不带）
+
+```powershell
+$env:JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'; $env:PATH="$env:JAVA_HOME\bin;$env:PATH"
+py -m porter port /path/to/game-folder -o out -k /path/to/prod.keys --experimental `
+    --vulkan-driver path/to/vulkan.ad07xx.so --progress lines
+```
+
+- **不带 `--vulkan-driver`**：APK 只有约 3.96 MB、没有内置驱动。Adreno 830 与 Mali 走系统驱动可正常运行；系统驱动停在 Vulkan 1.1 且缺少 `dynamic rendering` / `imageless framebuffer + render pass 2` 的 Adreno（如 Adreno 650，`Vulkan 1.1.128`）会报 `FATAL [vk] the device has neither dynamic rendering nor imageless ...` 退出。
+- **驱动来源**：可从本仓库 Release 的 APK 解出 `lib/arm64-v8a/libsysmem_vulkan.ad07xx.so`（16.36 MiB）。
+- 忘了设 `JAVA_HOME` → `d8.bat exit code 1 / JAVA_HOME is not set`。
+
+##### 4. 补两个贴图 key（若 profile 中缺失则必做）
+
+若第一次 `porter port` 在 `<游戏目录>/<TITLE_ID>_build/profile/<TITLE_ID>/game.tsv` 生成的 provisional profile 中缺少下面两行，请补上后再跑一次同样的命令（日志会出现 `reusing the provisional profile`）：
+
+```tsv
+tex_flush_upload	on
+tex_dirty_upload	on
+```
+
+不补的后果：这个游戏把贴图拷进 CPU 缓存池后从不刷 cache → **3D 人物和道具全黑**（背景和 UI 正常，容易误判为驱动问题）。
+
+##### 5. 打成 ZIP（给应用内导入）
+
+```powershell
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+[System.IO.Compression.ZipFile]::CreateFromDirectory(
+  "out/<Game>-data", "out/<Game>-data.zip",
+  [System.IO.Compression.CompressionLevel]::NoCompression, $true)
+```
+
+- 必须 **store**：RomFS 里的资源本来就压过了，Deflate 只是白烧 CPU（实测 store 解压 4.27 GB 只要 **22 秒**）。
+- 顶层目录保持 `<Game>-data/`，应用内导入会自动剥掉这一层。
+
+#### 验收（逐条对比）
+
+| 检查 | 通过标准 |
+|---|---|
+| 数据目录 | 3.97 GiB（4.27 GB）/ 约 5,200 个文件 |
+| APK | 约 27.8 MiB（29.2 MB），含 `lib/arm64-v8a/libsysmem_vulkan.ad07xx.so`（16.36 MiB） |
+| 安装 | `adb install -r` 成功，图标名正确 |
+| 启动 | 首次弹免费使用声明 → 检测到数据 → 自动进游戏 |
+| 驱动 | Adreno 650 见 `[vk] GPU Turnip Adreno ... Vulkan 1.3.x, driver 25.99.99`；Adreno 830 / Mali 走系统驱动 |
+| 错误 | 日志里 `[RED]` 计数为 **0** |
+| 画面 | 进第一章 3D 场景，人物/道具**不发黑** |
+| 帧率 | 默认 **30.0 fps**；暂停菜单开「60 帧模式」后，掌机 720p 可达 60，底座 1080p 视 GPU 而定 |
+| 导入 | 应用内选这个 ZIP → 解压完成 → 进游戏 |
+
+日志路径：`/sdcard/Android/data/<包名>/files/log.txt`
+
+#### 红线
+
+1. 不许下载或使用别人的 `prod.keys`、游戏 dump、预打包数据包
+2. 不许把游戏数据、keys、XCI/NSP 提交进任何 git 仓库
+3. 报告里可以写路径和命令，**keys 一律不写**
+4. 数据包内容不对就重跑，不要手改 RomFS 里的文件
+
+#### 常见失败与判断
+
+| 现象 | 原因 |
+|---|---|
+| `d8.bat exit code 1` + `JAVA_HOME is not set` | 没设 `JAVA_HOME`（指向 JBR） |
+| `inspect` 退出码 1 | 未支持的游戏，属正常现象 |
+| 数据目录只有几 MB | keys 不对或目录里没有本体，RomFS 未解出 |
+| APK 约 3.96 MB | 漏了 `--vulkan-driver`（仅旧款 Adreno 需要） |
+| 3D 人物/道具发黑 | profile 漏了 `tex_flush_upload` / `tex_dirty_upload` |
+| 只有 2 fps | 使用了旧版未修代码（内存池 256 MB 失败），需 `#492/#493/#494` 修复 |
+| `git clone` 握手失败 | 网络/代理波动，重试即可 |
+| 存档读不到 | 数据包需来自**同一版本**的游戏，勿混用不同本体版本 |
+
+</details>
+
+---
+
+## 常见问题
+
+<details>
+<summary><strong>为什么默认只有 30 fps？怎么开 60 帧？</strong></summary>
+
+30 fps 是 Switch 版的原始帧率。打开顶部 **☰** 暂停菜单 → 切换到「**游戏**」页 → 打开「**60 帧模式**」即可在线生效，无需重启。该开关只抬高渲染上限、保持逻辑步进不变，因此速度严格 1:1。能否跑满取决于分辨率与 GPU：掌机 720p 在三台实测设备上均可满 60；底座 1080p 上 Adreno 830 满 60，Adreno 650 / Mali-G68 约 40~50 fps。
+</details>
+
+<details>
+<summary><strong>3D 人物或道具发黑怎么办？</strong></summary>
+
+游戏把贴图拷贝进 CPU 缓存池后不会清 cache。本仓库发布的 APK 与上游 profile（`#476`）已内置 `tex_flush_upload = on` 与 `tex_dirty_upload = on` 解决该问题；如自己构建遇到此现象，请检查 `game.tsv` 是否包含这两行。
+</details>
+
+<details>
+<summary><strong>应用内解压失败或提示空间不足？</strong></summary>
+
+实测 4.27 GB 数据包在 OPPO Pad 上约 22 秒解压完成。失败通常是因为剩余空间不足（ZIP 4.27 GB + 解压后 4.27 GB ≈ 需 **8.6 GB** 空闲空间）或 ZIP 文件不完整。
+</details>
+
+<details>
+<summary><strong>菜单文字显示英文怎么切中文？</strong></summary>
+
+覆盖菜单自动跟随系统语言（中文系统即显示中文）。如需强制切换，可在 `/sdcard/Android/data/org.nx2a.t0100d7f00faaa000/files/env.txt` 中添加 `DM_UI_LANG=zh`（或 `en`）。
+</details>
+
+<details>
+<summary><strong>安装后没图标或启动闪退？</strong></summary>
+
+请确认设备为 `arm64-v8a` 且系统为 **Android 10+**（minSdk 29）。若此前安装过不同签名的版本，请先导出存档再卸载旧版重装。
+</details>
+
+<details>
+<summary><strong>存档存在哪里？怎么备份/换机？</strong></summary>
+
+游戏运行时存档位于应用内部存储；在暂停菜单「游戏」页点击「**导出存档**」会将其复制到 `/sdcard/Android/data/org.nx2a.t0100d7f00faaa000/files/saves/<时间戳>/`（应用私有目录，非公共下载目录），可通过「导入存档」或 `adb` 取回。
+</details>
+
+---
+
+## 技术细节
+
+- **移植工具链**：[nx2Android](https://github.com/shirai91/nx2android)（MIT）
+- **引擎与着色器**：MT Framework，构建时将 **460 个着色器** 转译为 SPIR-V
+- **内置驱动**：**Mesa Turnip 25.99.99（sysmem build，Vulkan 1.3.335）**，通过 [libadrenotools](https://github.com/bylaws/libadrenotools) 在应用内加载，不修改系统分区
+- **上游 PR 跟踪**：
+  - **已合入上游主线**：
+    - `#476`：游戏 profile（常量、着色器表、贴图刷新配置）
+    - `#492`：内存池分块幂等探测（回到 128 MB 档，修复 Adreno 650 整池退化为拷贝）
+    - `#493` / `#494`：覆盖层在可缓存内存栅格化（重绘 15~25 ms → 4~6 ms）与 30 Hz 非阻塞重绘（fence 等待上限 30 ms）
+    - `#506` / `#507`：`DM_TOUCH` 档案支持与覆盖层菜单中文化
+    - `#523`：天玑 / MediaTek 多 fd 硬件缓冲选取，恢复零拷贝（0.7 fps → 30 fps）
+  - **已关闭（未合并）**：`#477`（已拆分并由 `#492 / #493 / #494` 取代）
+  - **本版已包含、等待上游合并**：
+    - `#531`：CPU 解码 BC 纹理首用上传（修复章节标题卡全黑）
+    - `#551` / `#552`：Mali 零拷贝 CPU 数据缓存维护（`dc cvac`）与 present 路径 clear→blit 屏障（两者同在以消除天玑整屏黑闪）
+    - `#553`：视频切换解码器时保留 AVC 参数集（修复停播重播无声）
+    - `#554`：跨纯顺序屏障保持延迟 pass 打开
+    - `#642`：可选延迟清屏 pass 跳过未修改附件 load（`DM_VK_DEFER_CLEAR`，默认关）
+    - `#650` / `#652`：profile 帧锁配置与暂停菜单在线 60 帧开关
+
+---
+
+## 免责声明 / Disclaimer
 
 <details open>
 <summary>中文</summary>
@@ -42,340 +458,10 @@
 
 ---
 
-## 这是什么
-
-- Switch 版《大逆转裁判 1&2 成步堂龙之介的冒险与觉悟》的 **Android 原生重编译版本**：把游戏的 ARM64 代码翻译成 C 再编译成原生程序，运行时提供 Horizon 系统服务与 Maxwell GPU 的兼容层
-- 用 [nx2Android](https://github.com/shirai91/nx2android)（`porter` 工具链）生成，渲染走 **Vulkan**：系统驱动够新的设备（Adreno 830、Mali）直接用系统驱动；系统驱动停在 Vulkan 1.1 的 Adreno（如 Adreno 650）用 APK 内置的 Turnip
-- 自带屏幕手柄、覆盖菜单（帧率/透明度/布局编辑/震动/底座模式/导出导入存档）、底座模式触控
-
-## 环境要求
-
-| 项 | 要求 |
-|---|---|
-| 系统 | **Android 10+**（minSdk 29，targetSdk 36），arm64-v8a |
-| GPU | **Adreno 或 Mali 都能跑**（实测：Adreno 650 / Adreno 830 / Mali-G68）。APK 内置的 Turnip 只适用于 Adreno —— 系统驱动停在 Vulkan 1.1 的 Adreno 设备用它；**Mali 走系统驱动，不需要 Turnip**（天玑 900 / Mali-G68 / Vulkan 1.1.177 实测 30 fps，掌机 720p 可 60）。PowerVR / Xclipse 未实测 |
-| 存储 | 数据包 **3.97 GiB / 4.27 GB**（约 5,200 个文件）；应用内导入时 ZIP 本身也在机内，合计需 **约 8.6 GB** 空闲 |
-| 内存 | 实测在 8 GB 及以上的设备上跑得动（游戏堆 3.14 GB、堆区 3.25 GB）；4 GB / 6 GB 设备未实测 |
-| root | **不需要**（驱动随 APK，应用内加载） |
-
-> 上表与后文的时间、性能数字，除标注「估算」外，都在真机上实测过：OPPO Pad（OPD2101 / 骁龙 870 / Adreno 650 / Android 15）、红米（骁龙 8 Elite 级 / Adreno 830）、荣耀 Play5 活力版（天玑 900 / Mali-G68 / Android 12）。
-
-
-## 安装
-
-### 1. 装 APK
-
-从 [Releases](../../releases) 下载 `TheGreatAceAttorneyChronicles.apk` 安装。
-
-> APK 用自签名证书，若之前装过别的签名版本，先卸载再装。
-
-### 2. 放进游戏数据
-
-**方式 A：应用内导入（推荐，不需要电脑）**
-
-1. 首次启动会弹出**免费使用声明**，选择「知悉并继续」
-2. 检测不到数据时会显示「**选择游戏数据 ZIP**」
-3. 用系统文件选择器挑一个数据包 ZIP（见下方「自己生成数据包」）
-4. 应用自动解压到 `/sdcard/Android/data/org.nx2a.t0100d7f00faaa000/files/`，完成后自动进游戏
-   - 实测 4,268,285,912 字节 / 约 5,200 个文件 **22 秒**解完（OPPO Pad，UFS），过程中显示文件数与 MB 数
-
-> **不需要任何存储权限**：数据放在应用自己的 `Android/data/<包名>/files` 里，应用内导入走系统文件选择器。
-> 实测：`MANAGE_EXTERNAL_STORAGE` 和 `READ_EXTERNAL_STORAGE` **都没有授予**，游戏照常启动、4.27 GB 的包照常导入。
-> 只有把 RomFS 放在公共目录（`porter install --romfs-at /sdcard/...`）时才需要「所有文件访问」，那一步 porter 会自己授予。
-
-**方式 B：adb 推送（快）**
-
-```bash
-adb push TheGreatAceAttorneyChronicles-data/. /sdcard/Android/data/org.nx2a.t0100d7f00faaa000/files/
-```
-
-也可以直接用 porter 一步到位（会顺带装 APK）：
-
-```bash
-py -m porter install TheGreatAceAttorneyChronicles-data --device <序列号>
-```
-
-## 自己生成数据包（本仓库不提供）
-
-数据包必须由你**自己的** XCI / NSP dump 生成，工具是 [nx2Android](https://github.com/shirai91/nx2android)。
-
-两种做法，选一种：
-- **第一部分**：自己按命令跑（适合想看清每一步的人）
-- **第二部分**：把整段提示词丢给 Claude Code / Codex / Alma 之类的 agent，让它按验收标准跑完（省事）
-
-### 第一部分：自己动手做
-
-#### 准备
-
-1. **游戏本体**：XCI 或 NSP（你从自己主机 dump 的；`NSP` 目录里也可以放更新和 DLC）
-2. **密钥**：`prod.keys`（用 `Lockpick_RCM` 之类从自己的主机 dump；**不要**从网上下载别人的）
-3. **Python 3.11+**
-4. **Android NDK**（porter 自动找，缺失时会提示路径）。本流程在 **Windows 11 上实测**过；macOS / Linux 未实测
-
-#### 步骤
-
-```bash
-# 1) 取工具
-git clone https://github.com/shirai91/nx2android.git    # 网络不稳就多重试几次
-cd nx2android
-py -m pip install -r requirements.txt
-
-# 2) 先看这堆文件能不能被识别（可选）
-py -m porter inspect /path/to/game-folder
-#    未支持的游戏会打印 "no game profile ..." 并以退出码 1 结束，这是正常的，不是崩溃
-
-# 3) 生成 APK 和数据包
-py -m porter port /path/to/game-folder \
-    -o out \
-    -k /path/to/prod.keys \
-    --experimental \
-    --vulkan-driver /path/to/vulkan.ad07xx.so     # ← 强烈建议带上，见下方说明
-```
-
-跑完会得到：
-
-```
-out/TheGreatAceAttorneyChronicles.apk
-out/TheGreatAceAttorneyChronicles-data/      ← 3.97 GiB（4.27 GB），约 5,200 个文件
-```
-
-#### 构建时的三个坑（实测过）
-
-**① 不带 `--vulkan-driver` 的 APK 只有 4 MB，它没有内置驱动**
-
-那样只能吃系统驱动。原厂驱动在这台机器上实测是 `Adreno (TM) 650, Vulkan 1.1.128, driver 512.502.0`，
-启动即 `FATAL [vk] the device has neither dynamic rendering nor imageless ...` 并退出 —— 原因是它既不支持 `dynamic rendering`，也不支持 `imageless framebuffer + render pass 2`（`gfx_vk_core.c` 里的检查）。源码里那句 `apiVersion >= VK_API_VERSION_1_3` **只用于校验外置 Turnip 驱动（`DM_VK_DRIVER`）是否匹配设备**，跟系统驱动这条路无关 —— 所以 Mali-G68 报 `Vulkan 1.1.177` 也能正常跑。
-所以要么刷系统级 Turnip，要么把驱动打进 APK（下面这条）。
-**Mali 设备不受这条影响**：系统驱动本来就满足要求（Mali-G68 报 Vulkan 1.1.177 且带 imageless framebuffer），不带驱动的 APK 在 Mali 上照样跑，只是少了 Adreno 那份 Turnip。
-Turnip 驱动可以从 **本仓库 Release 的 APK 里取**：
-
-```bash
-# 从已发布的 APK 里解出驱动（16.4 MB）
-unzip -o TheGreatAceAttorneyChronicles.apk 'lib/arm64-v8a/libsysmem_vulkan.ad07xx.so' -d turnip
-py -m porter port /path/to/game-folder -o out -k prod.keys --experimental \
-    --vulkan-driver turnip/lib/arm64-v8a/libsysmem_vulkan.ad07xx.so
-```
-
-带驱动后 APK 约 27.8 MiB（29.2 MB），装上即可运行（驱动在应用内加载，不需要 root）。
-
-**② 自己 survey 出来的 profile 缺两个贴图 key，3D 人物/道具会发黑**
-
-这个游戏把贴图拷进 CPU 缓存池后从不刷 cache。第一次 `porter port` 会在
-`<游戏目录>/<TITLE_ID>_build/profile/<TITLE_ID>/game.tsv` 生成一份 survey 出来的 profile，
-在其中补两行再跑一次：
-
-```
-tex_flush_upload	on
-tex_dirty_upload	on
-```
-
-（这两行已经在 [PR #476](https://github.com/shirai91/nx2android/pull/476) 里提给上游；合并后就不用管了。）
-
-**③ 上游 HEAD 还没有本次的移植层修复**
-
-本仓库的 APK 是在上游基础上带了 [PR #492](https://github.com/shirai91/nx2android/pull/492) / [#493](https://github.com/shirai91/nx2android/pull/493) / [#494](https://github.com/shirai91/nx2android/pull/494) 的修复的（#477 那份改动最终拆成这三个 PR 合入主线）
-（内存池 256→254 MB、覆盖菜单重绘、fence 等待上限、底座模式触控）。
-直接从上游 clone 构建出来的是未修复版本：在这类机器上会掉到 2 fps、覆盖菜单会顿卡。
-想拿到同样的效果，就等 PR 合并，或者把那 8 个文件的改动自己打上去。
-
-#### 打成 ZIP（给应用内导入用）
-
-```powershell
-# Windows PowerShell
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-[System.IO.Compression.ZipFile]::CreateFromDirectory(
-  "out/TheGreatAceAttorneyChronicles-data",
-  "out/TheGreatAceAttorneyChronicles-data.zip",
-  [System.IO.Compression.CompressionLevel]::NoCompression, $true)
-```
-
-```bash
-# macOS / Linux（zip 的 -0 = store；这条命令未在 Linux 上实测，PowerShell 那条已实测）
-cd out && zip -0 -r TheGreatAceAttorneyChronicles-data.zip TheGreatAceAttorneyChronicles-data
-```
-
-- 用 **不压缩（store）**：RomFS 里的资源本来就压过了，Deflate 只是白烧 CPU
-- ZIP 顶层可以是 `TheGreatAceAttorneyChronicles-data/` 这一层目录，应用会自动剥掉
-
-### 第二部分：交给 Agent 做（提示词）
-
-数据包要自己从 dump 生成——把下面整段复制给 Claude Code / Codex / Alma 之类的 agent，它就知道该怎么跑、要验到什么程度。
-仓库根目录的 [`AGENTS.md`](AGENTS.md) 是同一份，支持该约定的 agent 会自动读到。
-里面写了：目标产物、必须由你提供的输入（本体 + `prod.keys`）、带 `--vulkan-driver` 的完整命令、
-第一次生成后要补的两个贴图 key、ZIP 打包方式、九条验收标准，以及八种常见失败的判断方法。
-
-<details>
-<summary>展开：完整的「生成数据包」提示词</summary>
-
-> 复制这一整篇给 coding agent。任务：用 [nx2Android](https://github.com/shirai91/nx2android) 的 `porter`，从**用户自己 dump 的游戏**生成这个移植需要的数据包（和能直接导入的 ZIP），并在设备上验证到「能进游戏、贴图正常」。
-
-
-#### 目标产物
-
-| 产物 | 说明 |
-|---|---|
-| `<Game>-data/` | 数据目录：**3.97 GiB / 约 5,200 文件**（RomFS、mods、env.txt、空 saves） |
-| `<Game>-data.zip` | **store 模式**（不压缩），给应用内导入用 |
-| `<Game>.apk` | 可选：27.7 MB，**内含 Turnip 驱动** |
-| 验证记录 | 启动日志关键行 + 至少一张游戏内截图 |
-
-#### 输入（必须由用户提供，agent 不得自行寻找或下载）
-
-1. **游戏本体**：XCI 或 NSP —— 用户从自己的主机 dump
-2. **`prod.keys`** —— 用户从自己的主机 dump（`Lockpick_RCM` 之类）
-3. 放游戏的目录（含 `.xci` 或 `.nsp`，更新/DLC 可一并放在同目录）
-4. 环境：**Python 3.11+**、**Android NDK**（porter 自动找）、**JDK**（`d8` 需要）
-
-> 拿不到 1/2 就停下来问，不要用网上找的 keys 或游戏文件。
-
-#### 步骤（全部实测过）
-
-##### 1. 取工具
-
-```bash
-git clone https://github.com/shirai91/nx2android.git      # 握手失败就多重试几次
-cd nx2android
-py -m pip install -r requirements.txt
-```
-
-##### 2. 先看能不能识别
-
-```bash
-py -m porter inspect /path/to/game-folder
-```
-
-未支持的游戏会打印 `no game profile for <TITLE_ID>` 并以**退出码 1** 结束——这是正常的，不是崩溃，下一步加 `--experimental` 即可。
-
-##### 3. 生成（**必须带 `--vulkan-driver`**）
-
-```powershell
-$env:JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'; $env:PATH="$env:JAVA_HOME\bin;$env:PATH"
-py -m porter port /path/to/game-folder -o out -k /path/to/prod.keys --experimental `
-    --vulkan-driver path/to/vulkan.ad07xx.so --progress lines
-```
-
-- **不带 `--vulkan-driver`**（只对 Adreno 有意义；Mali 用系统驱动，可以不带）：APK 只有 3.96 MB、没有内置驱动。原厂 Adreno 实测 `Vulkan 1.1.128`，启动即 `FATAL [vk] the device has neither dynamic rendering nor imageless ...` 退出
-- 驱动从哪来：本仓库 Release 的 APK 里解出 `lib/arm64-v8a/libsysmem_vulkan.ad07xx.so`（16.36 MB）
-- 忘了设 `JAVA_HOME` → `d8.bat exit code 1 / JAVA_HOME is not set`
-
-##### 4. 补两个贴图 key（第一次生成后**必做**）
-
-第一次 `porter port` 会在 `<游戏目录>/<TITLE_ID>_build/profile/<TITLE_ID>/game.tsv` 生成一份 survey 出来的 profile，往里面加两行：
-
-```
-tex_flush_upload	on
-tex_dirty_upload	on
-```
-
-再跑一次同样的命令（会复用这份 profile，日志里能看到 `reusing the provisional profile`）。
-
-不补的后果：这个游戏把贴图拷进 CPU 缓存池后从不刷 cache → **3D 人物和道具全黑**（背景和 UI 正常，很容易以为是驱动问题）。
-
-##### 5. 打成 ZIP（给应用内导入）
-
-```powershell
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-[System.IO.Compression.ZipFile]::CreateFromDirectory(
-  "out/<Game>-data", "out/<Game>-data.zip",
-  [System.IO.Compression.CompressionLevel]::NoCompression, $true)
-```
-
-- 必须 **store**：RomFS 里的资源本来就压过了，Deflate 只是白烧 CPU（实测 store 解压 4.27 GB 只要 **22 秒**）
-- 顶层目录保持 `<Game>-data/`，应用内导入会自动剥掉这一层
-
-#### 验收（逐条对比）
-
-| 检查 | 通过标准 |
-|---|---|
-| 数据目录 | 3.97 GiB（4.27 GB）/ 约 5,200 个文件 |
-| APK | 约 27.8 MiB（29.2 MB），含 `lib/arm64-v8a/libsysmem_vulkan.ad07xx.so`（16.36 MiB） |
-| 安装 | `adb install -r` 成功，图标名正确 |
-| 启动 | 首次弹免费使用声明 → 检测到数据 → 自动进游戏 |
-| 驱动 | 日志 `[vk] GPU Turnip Adreno ... Vulkan 1.3.x, driver 25.99.99` |
-| 错误 | 日志里 `[RED]` 计数为 **0** |
-| 画面 | 进第一章 3D 场景，人物/道具**不发黑** |
-| 帧率 | 默认 **30.0 fps**（引擎的原始帧率）；暂停菜单开「60 帧模式」后，掌机 720p 可达 60，底座 1080p 视 GPU 而定 |
-| 导入 | 应用内选这个 ZIP → 解压完成 → 进游戏 |
-
-日志路径：`/sdcard/Android/data/<包名>/files/log.txt`
-
-#### 红线
-
-1. 不许下载或使用别人的 `prod.keys`、游戏 dump、预打包数据包
-2. 不许把游戏数据、keys、XCI/NSP 提交进任何 git 仓库
-3. 报告里可以写路径和命令，**keys 一律不写**
-4. 数据包内容不对就重跑，不要手改 RomFS 里的文件
-
-#### 常见失败与判断
-
-| 现象 | 原因 |
-|---|---|
-| `d8.bat exit code 1` + `JAVA_HOME is not set` | 没设 `JAVA_HOME`（指 JBR） |
-| `inspect` 退出码 1 | 未支持的游戏，正常 |
-| 数据目录只有几 MB | keys 不对或目录里没有本体，RomFS 没解出来 |
-| APK 3.96 MB | 漏了 `--vulkan-driver` |
-| 3D 人物/道具发黑 | 漏了那两个贴图 key |
-| 只有 2 fps | 用的是上游未修版本（内存池 256 MB），需 #492/#493/#494 那批修复（已在本仓库 APK 里） |
-| `git clone` 握手失败 | 网络/代理，重试 |
-| 存档读不到 | 数据包要来自**同一版本**的游戏（本体版本别混用） |
-
-</details>
-
-## 操作
-
-- 顶部 **☰** 呼出覆盖菜单，四个页签（底部「继续游戏」关掉菜单）：
-  - **手柄**：显示手柄 / 透明度 / 编辑布局 / 震动 / 触控输入 / 按键布局 / 音频输出
-  - **游戏**：显示帧率 / 超级分辨率 / 锐度 / 模式（掌机 ↔ 底座）/ **60 帧模式** / 导出存档 / 导入存档
-  - **计数**：帧率行 / SoC 行 / 电量行 / 驱动行 / 帧时图
-  - **样式**：帧率计数器的位置 / 颜色 / 描边 / 大小
-- 「触控输入」打开后，手指直接给游戏的触摸屏（覆盖菜单自己的按钮仍然优先）；底座模式下按**画面矩形**映射，点到哪儿就是哪儿
-  （`DM_TOUCH_DOCKED=screen` 才回到按 1920×1080 屏幕坐标映射的老行为）
-- 「**60 帧模式**」**在线生效**，不用重启；状态记在 `settings.txt` 的 `fps60=`，下次启动保持。它只把渲染上限 `sApp.mMaxFps` 抬到 60，逻辑步进 `mFps` 留 30 —— 引擎的时间缩放比自动变成 0.5，所以**打字、自动播放、转场、镜头全部 1:1**，不会加速
-- 菜单文案跟随系统语言（中文系统=中文，其它=英文），`env.txt` 里加 `DM_UI_LANG=zh|en` 可强制
-
-## 性能 / 60 帧实测
-
-各设备各自的存档与场景，窗口 30~250 秒不等，暂停菜单里的「60 帧模式」打开：
-
-| 设备 | GPU | 分辨率 | frame p50 | p95 | GPU p50 | 掉帧 |
-|---|---|---|---|---|---|---|
-| 红米（骁龙 8 Elite 级） | Adreno 830 | 底座 1080p，第一章实机 | **16.67 ms** | 18.20 | 3.0 ms | 1 / 7 800 |
-| OPPO Pad OPD2101 | Adreno 650（Turnip） | 掌机 720p | **16.6 ms** | ~18 | 13.9 ms | 0 |
-| 荣耀 Play5 活力版 | Mali-G68（天玑 900） | 掌机 720p | **16.66 ms** | 17.54 | 14.1 ms | 16 / 15 300（250 秒） |
-| 荣耀 Play5 活力版 | Mali-G68（天玑 900） | 底座 1080p | 24.9 ms（约 40 fps） | 26.7 | 22.9 ms | 1 831 / 3 900 |
-
-结论：**能不能满 60 看分辨率，不是芯片档位**。同一台天玑 900，掌机 720p 稳定 60、底座 1080p 只有约 40。
-不开这个开关时，一切与 v1.2.0 相同（默认 30 fps）。
-
-## 已知情况 / 常见问题
-
-| 现象 | 说明 |
-|---|---|
-| **默认只有 30 fps** | 这是 Switch 版的原始帧率。暂停菜单「游戏」页有 **60 帧模式** 开关：只抬渲染上限、逻辑步进不动，所以速度 1:1。能否真跑满看分辨率 —— **掌机 720p 基本满 60，底座 1080p 一般 40~50**（1080p 像素是 720p 的 2.25 倍） |
-| 3D 人物/道具发黑 | 这个游戏把贴图拷进 CPU 缓存池后从不清 cache。已在其 profile 里加上 `tex_flush_upload` / `tex_dirty_upload` 解决（本版 APK/profile 已包含） |
-| 解压失败 / 空间不够 | 实测 4.27 GB 解压 22 秒；失败通常是空间不足（ZIP 4.27 GB + 解压后 4.27 GB ≈ 需 8.6 GB 空闲）或 ZIP 不完整 |
-| 菜单文字是英文 | 跟随系统语言：中文系统就是中文；也可在 `env.txt` 加 `DM_UI_LANG=zh` 强制 |
-| 装了没图标/闪退 | 确认是 arm64 设备、Android 10+；卸载旧签名版本再装 |
-| 存档在哪 | 应用内 `/sdcard/Android/data/org.nx2a.t0100d7f00faaa000/files/saves`；菜单「导出存档」会复制到同一目录下的**时间戳子文件夹**（应用私有目录，不是公共下载目录），用「导入存档」或 adb 取回 |
-
-## 技术细节（想复现/改进的看这里）
-
-- 移植工具：[nx2Android](https://github.com/shirai91/nx2android)（MIT）
-- 着色器/贴图：MT Framework，460 个着色器在移植时翻译成 SPIR-V
-- 驱动：内置 **Mesa Turnip 25.99.99（sysmem build，Vulkan 1.3.335）**，通过 [libadrenotools](https://github.com/bylaws/libadrenotools) 加载，不需要动系统分区
-- 本版包含的移植层修复（在上游主线或已提 PR）：
-  - **天玑 / MediaTek 多 fd 硬件缓冲**：句柄里 3 个 fd，取对那个才是 gralloc —— 零拷贝恢复，0.7 fps → 30 fps（上游 #523）
-  - **Mali 零拷贝的 CPU 数据缓存维护**（`dc cvac`）+ **present 路径 clear→blit 屏障**（#551 / #552）：两者必须同在，缺一个天玑上整屏黑闪
-  - **CPU 解码 BC 纹理的首用上传**（#531）：章节标题卡不再全黑
-  - **视频换解码器时保留 AVC 参数集**（#553）：停播后重播不再无声
-  - **暂停菜单 60 帧开关**（#652）+ **profile 的帧锁行**（#650）
-  - **延迟清屏 pass 跳过未修改附件的 load**（#642，默认关）：1080p 上省两处显存往返
-  - 内存池分块探测回到 **128 MB 幂等档**：Adreno 650 上整池不再退化成拷贝
-  - 覆盖层面板在可缓存内存里栅格化（重绘 15~25 ms → 4~6 ms）；重绘 fence 上限 30 ms；底座触控映射 1920×1080
-- 游戏的 profile（常量、着色器表、两个贴图 key）：上游 PR #476
-## 致谢
-
-- [shirai91/nx2android](https://github.com/shirai91/nx2android)——移植工具链（MIT）
-- [Mesa / Turnip](https://gitlab.freedesktop.org/mesa/mesa)——开源 Adreno Vulkan 驱动
-- [libadrenotools](https://github.com/bylaws/libadrenotools)——驱动热加载（BSD-2-Clause）
+## 致谢与许可证
+
+- [shirai91/nx2android](https://github.com/shirai91/nx2android) — 移植工具链（MIT）
+- [Mesa / Turnip](https://gitlab.freedesktop.org/mesa/mesa) — 开源 Adreno Vulkan 驱动
+- [libadrenotools](https://github.com/bylaws/libadrenotools) — 驱动应用内加载（BSD-2-Clause）
 - 界面字体：Ark Pixel / Cubic 11 / Galmuri（SIL OFL）
+- 游戏内容著作权归 **CAPCOM** 所有；本仓库仅包含构建脚本与基于上游 MIT 工具链生成的 APK 封装。
