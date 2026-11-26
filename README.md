@@ -6,7 +6,7 @@
 
 *Native Android recompilation port of The Great Ace Attorney Chronicles (Switch), powered by [nx2Android](https://github.com/shirai91/nx2android).*
 
-[![Latest Release](https://img.shields.io/github/v/release/qzj112223/TGAAC-Android?label=Release&color=blue)](../../releases/tag/v1.3.0)
+[![Latest Release](https://img.shields.io/github/v/release/qzj112223/TGAAC-Android?label=Release&color=blue)](../../releases/tag/v1.4.0)
 [![Platform](https://img.shields.io/badge/Android-10%2B%20%7C%20arm64--v8a-3DDC84?logo=android&logoColor=white)](#环境要求与兼容性)
 [![Upstream](https://img.shields.io/badge/Toolchain-nx2Android%20(MIT)-black?logo=github)](https://github.com/shirai91/nx2android)
 [![Issues](https://img.shields.io/github/issues/qzj112223/TGAAC-Android?label=Issues)](https://github.com/qzj112223/TGAAC-Android/issues)
@@ -20,7 +20,7 @@
 
 > 🎉 **致谢上游 [nx2Android](https://github.com/shirai91/nx2android)** —— 本移植完全由其开源的 `porter` 工具链（MIT）生成：将 Switch 的 ARM64 代码静态重编译为原生程序，并提供 Horizon 系统服务与 Maxwell GPU 的 Vulkan 兼容层，让「自己 dump、自己生成、自己玩」成为可能。
 
-> **最新版 [v1.3.0](../../releases/tag/v1.3.0)**：暂停菜单新增「**60 帧模式**」在线开关（速度 1:1，掌机 720p 在三台实测机型上均可满 60，含天玑 900 / Mali-G68；底座 1080p 上 Adreno 830 满 60，Adreno 650 与 Mali-G68 约 40~50），并修复天玑/Mali 整屏黑闪、章节标题卡黑屏、视频停播无声与底座触控问题。详见 [CHANGELOG.md](CHANGELOG.md)。
+> **最新版 [v1.4.0](../../releases/tag/v1.4.0)**：新增「**画面填充**」—— 暂停菜单「游戏」页签可在线切换 **黑边 / 铺满 / 拉伸** 三档，铺满与拉伸会一并延伸进屏幕刘海区，2.2:1 一类宽屏手机上的两侧黑边就此消失（默认仍是黑边）；同时把「触控输入」放回「手柄」页签。详见 [CHANGELOG.md](CHANGELOG.md)。
 
 ---
 
@@ -46,6 +46,7 @@
 
 - **原生重编译，非模拟器**：游戏 ARM64 逻辑转译为 C 并编译为 Android `arm64-v8a` 原生代码，图形走 Vulkan。
 - **在线 60 帧模式（1:1 速度）**：暂停菜单「游戏」页一键切换 30↔60 fps，无需重启；仅抬高渲染上限 `sApp.mMaxFps`，逻辑基准 `mFps` 保持 30，打字、自动播放、转场与镜头速度完全 1:1。
+- **画面填充 / 全面屏适配**：暂停菜单「游戏」页签的「画面填充」提供三档 —— **黑边**（默认，等比留边）、**铺满**（等比放大后居中裁切）、**拉伸**（非等比拉满）。切到铺满/拉伸时画面同时延伸进刘海区域，在 2.2:1 一类宽屏手机上消除两侧黑边。状态写入 `settings.txt` 的 `fit=`，在线生效、重启保留。
 - **Adreno 与 Mali 双平台可用**：系统驱动满足要求的设备（如 Adreno 830、Mali-G68）直走系统驱动；旧款 Vulkan 1.1 Adreno（如 Adreno 650）自动使用 APK 内置的 Turnip 驱动，无需 root。
 - **免存储权限应用内导入**：首次启动通过系统文件选择器直接导入数据包 ZIP，无需 `MANAGE_EXTERNAL_STORAGE` / `READ_EXTERNAL_STORAGE` 权限。
 - **完整的移动端交互**：内置可编辑虚拟手柄、触控透传（支持掌机与底座模式）、实时帧率/温度/帧时图覆盖层、中英双语菜单，以及应用内一键存档导出/导入。
@@ -54,11 +55,13 @@
 
 ## 实机截图
 
-> *截图占位：欢迎补充实机画面（将图片放入 `docs/screenshots/` 后替换下方占位即可）。*
+> 以下均为 **HONOR Play5（天玑 900 / Mali-G68 MC4）** 实机截图，屏幕 2376×1080（约 2.2:1）。
 
-| 标题 / 实机画面（60 fps 覆盖层） | 暂停菜单（游戏页 · 60 帧模式开关） | 布局编辑器 / 触控输入 |
-| :---: | :---: | :---: |
-| *待补充（`docs/screenshots/gameplay_60fps.png`）* | *待补充（`docs/screenshots/menu_game_tab.png`）* | *待补充（`docs/screenshots/layout_editor.png`）* |
+| 全屏 + 60 帧覆盖层（掌机 720p） | 暂停菜单 ·「游戏」页签 |
+| :---: | :---: |
+| ![全屏 60 帧](docs/screenshots/01_fps60_fullscreen.jpg) | ![游戏页签](docs/screenshots/02_menu_game_tab.jpg) |
+| **暂停菜单 ·「手柄」页签（触控输入）** | **默认「黑边」模式（未启用画面填充）** |
+| ![手柄页签](docs/screenshots/03_menu_gamepad_tab.jpg) | ![默认黑边](docs/screenshots/04_letterbox_default.jpg) |
 
 ---
 
@@ -142,12 +145,13 @@ py -m porter install TheGreatAceAttorneyChronicles-data --device <序列号>
 
 | 页签 | 菜单项 |
 |---|---|
-| **手柄** | 显示手柄 / 透明度 / 编辑布局 / 震动 / 触控输入 / 按键布局 / 音频输出 |
-| **游戏** | 显示帧率 / 超级分辨率 / 锐度 / 模式（掌机 ↔ 底座） / **60 帧模式** / 导出存档 / 导入存档 |
+| **手柄** | 显示手柄 / 透明度 / 编辑布局 / 摇杆区域 / 震动 / 触控输入 / 按键布局 / 音频输出 |
+| **游戏** | 显示帧率 / 超级分辨率 / 锐度 / 模式（掌机 ↔ 底座） / 导出存档 / 导入存档 / **60 帧模式** / **画面填充** |
 | **计数** | 帧率行 / SoC 行 / 电量行 / 驱动行 / 帧时图 |
 | **样式** | 位置 / 颜色 / 描边 / 大小 |
 
 - **60 帧模式**：**在线生效**，无需重启；状态写入 `settings.txt` 的 `fps60=`，下次启动自动保留。仅将渲染上限 `sApp.mMaxFps` 提升至 60、逻辑步进 `mFps` 维持 30，引擎时间缩放比自动为 0.5，演出与操作速度保持 1:1。
+- **画面填充**：三档在线切换 —— **黑边**（默认）/ **铺满**（等比裁切）/ **拉伸**（非等比拉满）。选铺满或拉伸时画面会延伸进刘海区，切回黑边后系统区域自动收回；宽屏手机（如 2376×1080）推荐「铺满」。
 - **触控输入**：开启后触摸事件直接透传给游戏触摸屏（覆盖菜单按钮仍优先）。底座模式下默认按 1920×1080 主机屏幕像素映射（`env.txt` 设置 `DM_TOUCH_DOCKED=screen` 时切回 1280×720 面板坐标）。
 - **界面语言**：自动跟随系统语言（中文系统显示中文，其余显示英文）；可在 `env.txt` 中添加 `DM_UI_LANG=zh` 或 `DM_UI_LANG=en` 强制指定。
 
