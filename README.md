@@ -6,7 +6,7 @@
 
 > 本项目是从自己 dump 的 Switch 卡带生成的 **原生移植**：不是模拟器，游戏逻辑直接在本机跑，渲染走 Vulkan。
 
-> **最新版：[v1.3.0](../../releases/tag/v1.3.0)** —— 新增暂停菜单「60 帧模式」开关（**掌机 720p 实测满 60 fps**，底座 1080p 约 50）：在线切换、速度 1:1。同时修复天玑 / Mali 的整屏黑闪、章节标题卡黑屏、视频停播后无声、底座触控无反应。
+> **最新版：[v1.3.0](../../releases/tag/v1.3.0)** —— 暂停菜单新增「**60 帧模式**」开关：在线切换、速度 1:1，**掌机 720p 在三台实测设备上都能满 60**（含天玑 900 / Mali-G68），底座 1080p 一般 40~50。同时修复天玑 / Mali 的整屏黑闪、章节标题卡黑屏、视频停播后无声、底座触控无反应。
 >
 > 完整更新记录见 [CHANGELOG.md](CHANGELOG.md)。
 
@@ -99,14 +99,20 @@ py -m porter install TheGreatAceAttorneyChronicles-data --device <序列号>
 
 数据包必须由你**自己的** XCI / NSP dump 生成，工具是 [nx2Android](https://github.com/shirai91/nx2android)。
 
-### 准备
+两种做法，选一种：
+- **第一部分**：自己按命令跑（适合想看清每一步的人）
+- **第二部分**：把整段提示词丢给 Claude Code / Codex / Alma 之类的 agent，让它按验收标准跑完（省事）
+
+### 第一部分：自己动手做
+
+#### 准备
 
 1. **游戏本体**：XCI 或 NSP（你从自己主机 dump 的；`NSP` 目录里也可以放更新和 DLC）
 2. **密钥**：`prod.keys`（用 `Lockpick_RCM` 之类从自己的主机 dump；**不要**从网上下载别人的）
 3. **Python 3.11+**
 4. **Android NDK**（porter 自动找，缺失时会提示路径）。本流程在 **Windows 11 上实测**过；macOS / Linux 未实测
 
-### 步骤
+#### 步骤
 
 ```bash
 # 1) 取工具
@@ -133,7 +139,7 @@ out/TheGreatAceAttorneyChronicles.apk
 out/TheGreatAceAttorneyChronicles-data/      ← 3.97 GiB（4.27 GB），约 5,200 个文件
 ```
 
-### 构建时的三个坑（实测过）
+#### 构建时的三个坑（实测过）
 
 **① 不带 `--vulkan-driver` 的 APK 只有 4 MB，它没有内置驱动**
 
@@ -171,7 +177,7 @@ tex_dirty_upload	on
 直接从上游 clone 构建出来的是未修复版本：在这类机器上会掉到 2 fps、覆盖菜单会顿卡。
 想拿到同样的效果，就等 PR 合并，或者把那 8 个文件的改动自己打上去。
 
-### 打成 ZIP（给应用内导入用）
+#### 打成 ZIP（给应用内导入用）
 
 ```powershell
 # Windows PowerShell
@@ -190,37 +196,7 @@ cd out && zip -0 -r TheGreatAceAttorneyChronicles-data.zip TheGreatAceAttorneyCh
 - 用 **不压缩（store）**：RomFS 里的资源本来就压过了，Deflate 只是白烧 CPU
 - ZIP 顶层可以是 `TheGreatAceAttorneyChronicles-data/` 这一层目录，应用会自动剥掉
 
-## 操作
-
-- 顶部 **☰** 呼出覆盖菜单：显示手柄 / 透明度 / 编辑布局 / 震动 / 显示帧率 / 模式（掌机 ↔ 底座）/ 导出存档 / 导入存档 / 按键布局 / 音频输出 / 触屏操作 / 继续游戏
-- 「触屏操作」打开后，手指直接给游戏的触摸屏（覆盖菜单自己的按钮仍然优先）；底座模式下按**画面矩形**映射，点到哪儿就是哪儿
-  （`DM_TOUCH_DOCKED=screen` 才回到按 1920×1080 屏幕坐标映射的老行为）
-- 菜单文案跟随系统语言（中文系统=中文，其它=英文），`env.txt` 里加 `DM_UI_LANG=zh|en` 可强制
-
-## 已知情况 / 常见问题
-
-| 现象 | 说明 |
-|---|---|
-| **只有 30 fps** | 游戏引擎按固定 1/30 步进跑，GPU 只占 10~14 ms，余量很大——但帧闸门在引擎内部，改不了 |
-| 3D 人物/道具发黑 | 这个游戏把贴图拷进 CPU 缓存池后从不清 cache。已在其 profile 里加上 `tex_flush_upload` / `tex_dirty_upload` 解决（本版 APK/profile 已包含） |
-| 解压失败 / 空间不够 | 实测 4.27 GB 解压 22 秒；失败通常是空间不足（ZIP 4.27 GB + 解压后 4.27 GB ≈ 需 8.6 GB 空闲）或 ZIP 不完整 |
-| 菜单文字是英文 | 跟随系统语言：中文系统就是中文；也可在 `env.txt` 加 `DM_UI_LANG=zh` 强制 |
-| 装了没图标/闪退 | 确认是 arm64 设备、Android 10+；卸载旧签名版本再装 |
-| 存档在哪 | 应用内 `/sdcard/Android/data/org.nx2a.t0100d7f00faaa000/files/saves`；也可用菜单「导出存档」导出到公共目录 |
-
-## 技术细节（想复现/改进的看这里）
-
-- 移植工具：[nx2Android](https://github.com/shirai91/nx2android)（MIT）
-- 着色器/贴图：MT Framework，460 个着色器在移植时翻译成 SPIR-V
-- 驱动：内置 **Mesa Turnip 25.99.99（sysmem build，Vulkan 1.3.335）**，通过 [libadrenotools](https://github.com/bylaws/libadrenotools) 加载，不需要动系统分区
-- 本版针对移植层做的修复（已提上游 PR [#477](https://github.com/shirai91/nx2android/pull/477)）：
-  - 内存池分块 256 MB → **254 MB**：部分 gralloc 拒绝正好 256 MB 的 `AHardwareBuffer`，否则每帧要拷 768 MB（30 fps → 2 fps）
-  - 覆盖层面板改为在可缓存内存里栅格化，再一次性拷进映射缓冲区（重绘 15~25 ms → 4~6 ms）
-  - 重绘时 fence/acquire 等待上限 30 ms，菜单打开时按 vsync 持续重绘
-  - 底座模式触控映射到 1920×1080 屏幕像素
-- 游戏的 profile（常量、着色器表、两个贴图 key）：上游 PR [#476](https://github.com/shirai91/nx2android/pull/476)
-
-## 交给 Agent 生成数据包（提示词）
+### 第二部分：交给 Agent 做（提示词）
 
 数据包要自己从 dump 生成——把下面整段复制给 Claude Code / Codex / Alma 之类的 agent，它就知道该怎么跑、要验到什么程度。
 仓库根目录的 [`AGENTS.md`](AGENTS.md) 是同一份，支持该约定的 agent 会自动读到。
@@ -233,7 +209,7 @@ cd out && zip -0 -r TheGreatAceAttorneyChronicles-data.zip TheGreatAceAttorneyCh
 > 复制这一整篇给 coding agent。任务：用 [nx2Android](https://github.com/shirai91/nx2android) 的 `porter`，从**用户自己 dump 的游戏**生成这个移植需要的数据包（和能直接导入的 ZIP），并在设备上验证到「能进游戏、贴图正常」。
 
 
-### 目标产物
+#### 目标产物
 
 | 产物 | 说明 |
 |---|---|
@@ -242,7 +218,7 @@ cd out && zip -0 -r TheGreatAceAttorneyChronicles-data.zip TheGreatAceAttorneyCh
 | `<Game>.apk` | 可选：27.7 MB，**内含 Turnip 驱动** |
 | 验证记录 | 启动日志关键行 + 至少一张游戏内截图 |
 
-### 输入（必须由用户提供，agent 不得自行寻找或下载）
+#### 输入（必须由用户提供，agent 不得自行寻找或下载）
 
 1. **游戏本体**：XCI 或 NSP —— 用户从自己的主机 dump
 2. **`prod.keys`** —— 用户从自己的主机 dump（`Lockpick_RCM` 之类）
@@ -251,9 +227,9 @@ cd out && zip -0 -r TheGreatAceAttorneyChronicles-data.zip TheGreatAceAttorneyCh
 
 > 拿不到 1/2 就停下来问，不要用网上找的 keys 或游戏文件。
 
-### 步骤（全部实测过）
+#### 步骤（全部实测过）
 
-#### 1. 取工具
+##### 1. 取工具
 
 ```bash
 git clone https://github.com/shirai91/nx2android.git      # 握手失败就多重试几次
@@ -261,7 +237,7 @@ cd nx2android
 py -m pip install -r requirements.txt
 ```
 
-#### 2. 先看能不能识别
+##### 2. 先看能不能识别
 
 ```bash
 py -m porter inspect /path/to/game-folder
@@ -269,7 +245,7 @@ py -m porter inspect /path/to/game-folder
 
 未支持的游戏会打印 `no game profile for <TITLE_ID>` 并以**退出码 1** 结束——这是正常的，不是崩溃，下一步加 `--experimental` 即可。
 
-#### 3. 生成（**必须带 `--vulkan-driver`**）
+##### 3. 生成（**必须带 `--vulkan-driver`**）
 
 ```powershell
 $env:JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'; $env:PATH="$env:JAVA_HOME\bin;$env:PATH"
@@ -281,7 +257,7 @@ py -m porter port /path/to/game-folder -o out -k /path/to/prod.keys --experiment
 - 驱动从哪来：本仓库 Release 的 APK 里解出 `lib/arm64-v8a/libsysmem_vulkan.ad07xx.so`（16.36 MB）
 - 忘了设 `JAVA_HOME` → `d8.bat exit code 1 / JAVA_HOME is not set`
 
-#### 4. 补两个贴图 key（第一次生成后**必做**）
+##### 4. 补两个贴图 key（第一次生成后**必做**）
 
 第一次 `porter port` 会在 `<游戏目录>/<TITLE_ID>_build/profile/<TITLE_ID>/game.tsv` 生成一份 survey 出来的 profile，往里面加两行：
 
@@ -294,7 +270,7 @@ tex_dirty_upload	on
 
 不补的后果：这个游戏把贴图拷进 CPU 缓存池后从不刷 cache → **3D 人物和道具全黑**（背景和 UI 正常，很容易以为是驱动问题）。
 
-#### 5. 打成 ZIP（给应用内导入）
+##### 5. 打成 ZIP（给应用内导入）
 
 ```powershell
 Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -306,7 +282,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 - 必须 **store**：RomFS 里的资源本来就压过了，Deflate 只是白烧 CPU（实测 store 解压 4.27 GB 只要 **22 秒**）
 - 顶层目录保持 `<Game>-data/`，应用内导入会自动剥掉这一层
 
-### 验收（逐条对比）
+#### 验收（逐条对比）
 
 | 检查 | 通过标准 |
 |---|---|
@@ -322,14 +298,14 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 日志路径：`/sdcard/Android/data/<包名>/files/log.txt`
 
-### 红线
+#### 红线
 
 1. 不许下载或使用别人的 `prod.keys`、游戏 dump、预打包数据包
 2. 不许把游戏数据、keys、XCI/NSP 提交进任何 git 仓库
 3. 报告里可以写路径和命令，**keys 一律不写**
 4. 数据包内容不对就重跑，不要手改 RomFS 里的文件
 
-### 常见失败与判断
+#### 常见失败与判断
 
 | 现象 | 原因 |
 |---|---|
@@ -344,6 +320,54 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 </details>
 
+## 操作
+
+- 顶部 **☰** 呼出覆盖菜单：显示手柄 / 透明度 / 编辑布局 / 震动 / 显示帧率 / 模式（掌机 ↔ 底座）/ **60 帧模式** / 导出存档 / 导入存档 / 按键布局 / 音频输出 / 触屏操作 / 继续游戏
+- 「触屏操作」打开后，手指直接给游戏的触摸屏（覆盖菜单自己的按钮仍然优先）；底座模式下按**画面矩形**映射，点到哪儿就是哪儿
+  （`DM_TOUCH_DOCKED=screen` 才回到按 1920×1080 屏幕坐标映射的老行为）
+- 「**60 帧模式**」**在线生效**，不用重启；状态记在 `settings.txt` 的 `fps60=`，下次启动保持。它只把渲染上限 `sApp.mMaxFps` 抬到 60，逻辑步进 `mFps` 留 30 —— 引擎的时间缩放比自动变成 0.5，所以**打字、自动播放、转场、镜头全部 1:1**，不会加速
+- 菜单文案跟随系统语言（中文系统=中文，其它=英文），`env.txt` 里加 `DM_UI_LANG=zh|en` 可强制
+
+## 性能 / 60 帧实测
+
+同一份存档、60 秒以上窗口、暂停菜单里的「60 帧模式」打开：
+
+| 设备 | GPU | 分辨率 | frame p50 | p95 | GPU p50 | 掉帧 |
+|---|---|---|---|---|---|---|
+| 红米（骁龙 8 Elite 级） | Adreno 830 | 底座 1080p，第一章实机 | **16.67 ms** | 18.20 | 3.0 ms | 1 / 7 800 |
+| OPPO Pad OPD2101 | Adreno 650（Turnip） | 掌机 720p | **16.6 ms** | ~18 | 13.9 ms | 0 |
+| 荣耀 Play5 活力版 | Mali-G68（天玑 900） | 掌机 720p | **16.66 ms** | 17.54 | 14.1 ms | 16 / 15 300（250 秒） |
+| 荣耀 Play5 活力版 | Mali-G68（天玑 900） | 底座 1080p | 24.9 ms（约 40 fps） | 26.7 | 22.9 ms | 1 831 / 3 900 |
+
+结论：**能不能满 60 看分辨率，不是芯片档位**。同一台天玑 900，掌机 720p 稳定 60、底座 1080p 只有约 40。
+不开这个开关时，一切与 v1.2.0 相同（默认 30 fps）。
+
+## 已知情况 / 常见问题
+
+| 现象 | 说明 |
+|---|---|
+| **默认只有 30 fps** | 这是 Switch 版的原始帧率。暂停菜单「游戏」页有 **60 帧模式** 开关：只抬渲染上限、逻辑步进不动，所以速度 1:1。能否真跑满看分辨率 —— **掌机 720p 基本满 60，底座 1080p 一般 40~50**（1080p 像素是 720p 的 2.25 倍） |
+| 3D 人物/道具发黑 | 这个游戏把贴图拷进 CPU 缓存池后从不清 cache。已在其 profile 里加上 `tex_flush_upload` / `tex_dirty_upload` 解决（本版 APK/profile 已包含） |
+| 解压失败 / 空间不够 | 实测 4.27 GB 解压 22 秒；失败通常是空间不足（ZIP 4.27 GB + 解压后 4.27 GB ≈ 需 8.6 GB 空闲）或 ZIP 不完整 |
+| 菜单文字是英文 | 跟随系统语言：中文系统就是中文；也可在 `env.txt` 加 `DM_UI_LANG=zh` 强制 |
+| 装了没图标/闪退 | 确认是 arm64 设备、Android 10+；卸载旧签名版本再装 |
+| 存档在哪 | 应用内 `/sdcard/Android/data/org.nx2a.t0100d7f00faaa000/files/saves`；也可用菜单「导出存档」导出到公共目录 |
+
+## 技术细节（想复现/改进的看这里）
+
+- 移植工具：[nx2Android](https://github.com/shirai91/nx2android)（MIT）
+- 着色器/贴图：MT Framework，460 个着色器在移植时翻译成 SPIR-V
+- 驱动：内置 **Mesa Turnip 25.99.99（sysmem build，Vulkan 1.3.335）**，通过 [libadrenotools](https://github.com/bylaws/libadrenotools) 加载，不需要动系统分区
+- 本版包含的移植层修复（在上游主线或已提 PR）：
+  - **天玑 / MediaTek 多 fd 硬件缓冲**：句柄里 3 个 fd，取对那个才是 gralloc —— 零拷贝恢复，0.7 fps → 30 fps（上游 #523）
+  - **Mali 零拷贝的 CPU 数据缓存维护**（`dc cvac`）+ **present 路径 clear→blit 屏障**（#551 / #552）：两者必须同在，缺一个天玑上整屏黑闪
+  - **CPU 解码 BC 纹理的首用上传**（#531）：章节标题卡不再全黑
+  - **视频换解码器时保留 AVC 参数集**（#553）：停播后重播不再无声
+  - **暂停菜单 60 帧开关**（#652）+ **profile 的帧锁行**（#650）
+  - **延迟清屏 pass 跳过未修改附件的 load**（#642，默认关）：1080p 上省两处显存往返
+  - 内存池分块探测回到 **128 MB 幂等档**：Adreno 650 上整池不再退化成拷贝
+  - 覆盖层面板在可缓存内存里栅格化（重绘 15~25 ms → 4~6 ms）；重绘 fence 上限 30 ms；底座触控映射 1920×1080
+- 游戏的 profile（常量、着色器表、两个贴图 key）：上游 PR #476
 ## 致谢
 
 - [shirai91/nx2android](https://github.com/shirai91/nx2android)——移植工具链（MIT）
