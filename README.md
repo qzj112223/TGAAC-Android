@@ -6,7 +6,7 @@
 
 > 本项目是从自己 dump 的 Switch 卡带生成的 **原生移植**：不是模拟器，游戏逻辑直接在本机跑，渲染走 Vulkan。
 
-> **最新版：[v1.3.0](../../releases/tag/v1.3.0)** —— 暂停菜单新增「**60 帧模式**」开关：在线切换、速度 1:1，**掌机 720p 在三台实测设备上都能满 60**（含天玑 900 / Mali-G68），底座 1080p 一般 40~50。同时修复天玑 / Mali 的整屏黑闪、章节标题卡黑屏、视频停播后无声、底座触控无反应。
+> **最新版：[v1.3.0](../../releases/tag/v1.3.0)** —— 暂停菜单新增「**60 帧模式**」开关：在线切换、速度 1:1，**掌机 720p 在三台实测设备上都能满 60**（含天玑 900 / Mali-G68）；底座 1080p 上 Adreno 830 也是满 60，Adreno 650 与 Mali-G68 约 40~50。同时修复天玑 / Mali 的整屏黑闪、章节标题卡黑屏、视频停播后无声、底座触控无反应。
 >
 > 完整更新记录见 [CHANGELOG.md](CHANGELOG.md)。
 
@@ -45,7 +45,7 @@
 ## 这是什么
 
 - Switch 版《大逆转裁判 1&2 成步堂龙之介的冒险与觉悟》的 **Android 原生重编译版本**：把游戏的 ARM64 代码翻译成 C 再编译成原生程序，运行时提供 Horizon 系统服务与 Maxwell GPU 的兼容层
-- 用 [nx2Android](https://github.com/shirai91/nx2android)（`porter` 工具链）生成，渲染走 **Vulkan**：Adreno 用 APK 内置的 Turnip，Mali 用系统驱动
+- 用 [nx2Android](https://github.com/shirai91/nx2android)（`porter` 工具链）生成，渲染走 **Vulkan**：系统驱动够新的设备（Adreno 830、Mali）直接用系统驱动；系统驱动停在 Vulkan 1.1 的 Adreno（如 Adreno 650）用 APK 内置的 Turnip
 - 自带屏幕手柄、覆盖菜单（帧率/透明度/布局编辑/震动/底座模式/导出导入存档）、底座模式触控
 
 ## 环境要求
@@ -55,7 +55,7 @@
 | 系统 | **Android 10+**（minSdk 29，targetSdk 36），arm64-v8a |
 | GPU | **Adreno 或 Mali 都能跑**（实测：Adreno 650 / Adreno 830 / Mali-G68）。APK 内置的 Turnip 只适用于 Adreno —— 系统驱动停在 Vulkan 1.1 的 Adreno 设备用它；**Mali 走系统驱动，不需要 Turnip**（天玑 900 / Mali-G68 / Vulkan 1.1.177 实测 30 fps，掌机 720p 可 60）。PowerVR / Xclipse 未实测 |
 | 存储 | 数据包 **3.97 GiB / 4.27 GB**（约 5,200 个文件）；应用内导入时 ZIP 本身也在机内，合计需 **约 8.6 GB** 空闲 |
-| 内存 | 建议 6 GB 以上（实测游戏堆 3.14 GB、堆区 3.25 GB） |
+| 内存 | 实测在 8 GB 及以上的设备上跑得动（游戏堆 3.14 GB、堆区 3.25 GB）；4 GB / 6 GB 设备未实测 |
 | root | **不需要**（驱动随 APK，应用内加载） |
 
 > 上表与后文的时间、性能数字，除标注「估算」外，都在真机上实测过：OPPO Pad（OPD2101 / 骁龙 870 / Adreno 650 / Android 15）、红米（骁龙 8 Elite 级 / Adreno 830）、荣耀 Play5 活力版（天玑 900 / Mali-G68 / Android 12）。
@@ -144,7 +144,7 @@ out/TheGreatAceAttorneyChronicles-data/      ← 3.97 GiB（4.27 GB），约 5,2
 **① 不带 `--vulkan-driver` 的 APK 只有 4 MB，它没有内置驱动**
 
 那样只能吃系统驱动。原厂驱动在这台机器上实测是 `Adreno (TM) 650, Vulkan 1.1.128, driver 512.502.0`，
-启动即 `FATAL [vk] the device has neither dynamic rendering nor imageless ...` 并退出——移植按 Vulkan 1.3 选设备（源码里 `apiVersion >= VK_API_VERSION_1_3`）。
+启动即 `FATAL [vk] the device has neither dynamic rendering nor imageless ...` 并退出 —— 原因是它既不支持 `dynamic rendering`，也不支持 `imageless framebuffer + render pass 2`（`gfx_vk_core.c` 里的检查）。源码里那句 `apiVersion >= VK_API_VERSION_1_3` **只用于校验外置 Turnip 驱动（`DM_VK_DRIVER`）是否匹配设备**，跟系统驱动这条路无关 —— 所以 Mali-G68 报 `Vulkan 1.1.177` 也能正常跑。
 所以要么刷系统级 Turnip，要么把驱动打进 APK（下面这条）。
 **Mali 设备不受这条影响**：系统驱动本来就满足要求（Mali-G68 报 Vulkan 1.1.177 且带 imageless framebuffer），不带驱动的 APK 在 Mali 上照样跑，只是少了 Adreno 那份 Turnip。
 Turnip 驱动可以从 **本仓库 Release 的 APK 里取**：
@@ -156,7 +156,7 @@ py -m porter port /path/to/game-folder -o out -k prod.keys --experimental \
     --vulkan-driver turnip/lib/arm64-v8a/libsysmem_vulkan.ad07xx.so
 ```
 
-带驱动后 APK 27.7 MB，装上即可运行（驱动在应用内加载，不需要 root）。
+带驱动后 APK 约 27.8 MiB（29.2 MB），装上即可运行（驱动在应用内加载，不需要 root）。
 
 **② 自己 survey 出来的 profile 缺两个贴图 key，3D 人物/道具会发黑**
 
@@ -173,7 +173,7 @@ tex_dirty_upload	on
 
 **③ 上游 HEAD 还没有本次的移植层修复**
 
-本仓库的 APK 是在上游基础上带了 [PR #477](https://github.com/shirai91/nx2android/pull/477) 的修复的
+本仓库的 APK 是在上游基础上带了 [PR #492](https://github.com/shirai91/nx2android/pull/492) / [#493](https://github.com/shirai91/nx2android/pull/493) / [#494](https://github.com/shirai91/nx2android/pull/494) 的修复的（#477 那份改动最终拆成这三个 PR 合入主线）
 （内存池 256→254 MB、覆盖菜单重绘、fence 等待上限、底座模式触控）。
 直接从上游 clone 构建出来的是未修复版本：在这类机器上会掉到 2 fps、覆盖菜单会顿卡。
 想拿到同样的效果，就等 PR 合并，或者把那 8 个文件的改动自己打上去。
@@ -288,13 +288,13 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 | 检查 | 通过标准 |
 |---|---|
 | 数据目录 | 3.97 GiB（4.27 GB）/ 约 5,200 个文件 |
-| APK | 27.7 MB，含 `lib/arm64-v8a/libsysmem_vulkan.ad07xx.so`（16.36 MB） |
+| APK | 约 27.8 MiB（29.2 MB），含 `lib/arm64-v8a/libsysmem_vulkan.ad07xx.so`（16.36 MiB） |
 | 安装 | `adb install -r` 成功，图标名正确 |
 | 启动 | 首次弹免费使用声明 → 检测到数据 → 自动进游戏 |
 | 驱动 | 日志 `[vk] GPU Turnip Adreno ... Vulkan 1.3.x, driver 25.99.99` |
 | 错误 | 日志里 `[RED]` 计数为 **0** |
 | 画面 | 进第一章 3D 场景，人物/道具**不发黑** |
-| 帧率 | 覆盖层稳定 **30.0 fps**（引擎固定 1/30，属预期） |
+| 帧率 | 默认 **30.0 fps**（引擎的原始帧率）；暂停菜单开「60 帧模式」后，掌机 720p 可达 60，底座 1080p 视 GPU 而定 |
 | 导入 | 应用内选这个 ZIP → 解压完成 → 进游戏 |
 
 日志路径：`/sdcard/Android/data/<包名>/files/log.txt`
@@ -315,7 +315,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 | 数据目录只有几 MB | keys 不对或目录里没有本体，RomFS 没解出来 |
 | APK 3.96 MB | 漏了 `--vulkan-driver` |
 | 3D 人物/道具发黑 | 漏了那两个贴图 key |
-| 只有 2 fps | 用的是上游未修版本（内存池 256 MB），需 PR #477 的修复 |
+| 只有 2 fps | 用的是上游未修版本（内存池 256 MB），需 #492/#493/#494 那批修复（已在本仓库 APK 里） |
 | `git clone` 握手失败 | 网络/代理，重试 |
 | 存档读不到 | 数据包要来自**同一版本**的游戏（本体版本别混用） |
 
@@ -335,7 +335,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 ## 性能 / 60 帧实测
 
-同一份存档、60 秒以上窗口、暂停菜单里的「60 帧模式」打开：
+各设备各自的存档与场景，窗口 30~250 秒不等，暂停菜单里的「60 帧模式」打开：
 
 | 设备 | GPU | 分辨率 | frame p50 | p95 | GPU p50 | 掉帧 |
 |---|---|---|---|---|---|---|
@@ -356,7 +356,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 | 解压失败 / 空间不够 | 实测 4.27 GB 解压 22 秒；失败通常是空间不足（ZIP 4.27 GB + 解压后 4.27 GB ≈ 需 8.6 GB 空闲）或 ZIP 不完整 |
 | 菜单文字是英文 | 跟随系统语言：中文系统就是中文；也可在 `env.txt` 加 `DM_UI_LANG=zh` 强制 |
 | 装了没图标/闪退 | 确认是 arm64 设备、Android 10+；卸载旧签名版本再装 |
-| 存档在哪 | 应用内 `/sdcard/Android/data/org.nx2a.t0100d7f00faaa000/files/saves`；也可用菜单「导出存档」导出到公共目录 |
+| 存档在哪 | 应用内 `/sdcard/Android/data/org.nx2a.t0100d7f00faaa000/files/saves`；菜单「导出存档」会复制到同一目录下的**时间戳子文件夹**（应用私有目录，不是公共下载目录），用「导入存档」或 adb 取回 |
 
 ## 技术细节（想复现/改进的看这里）
 
