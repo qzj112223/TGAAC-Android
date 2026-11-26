@@ -45,7 +45,7 @@
 ## 这是什么
 
 - Switch 版《大逆转裁判 1&2 成步堂龙之介的冒险与觉悟》的 **Android 原生重编译版本**：把游戏的 ARM64 代码翻译成 C 再编译成原生程序，运行时提供 Horizon 系统服务与 Maxwell GPU 的兼容层
-- 用 [nx2Android](https://github.com/shirai91/nx2android)（`porter` 工具链）生成，渲染走 **Vulkan**（Adreno 设备内置 Turnip 驱动）
+- 用 [nx2Android](https://github.com/shirai91/nx2android)（`porter` 工具链）生成，渲染走 **Vulkan**：Adreno 用 APK 内置的 Turnip，Mali 用系统驱动
 - 自带屏幕手柄、覆盖菜单（帧率/透明度/布局编辑/震动/底座模式/导出导入存档）、底座模式触控
 
 ## 环境要求
@@ -53,12 +53,12 @@
 | 项 | 要求 |
 |---|---|
 | 系统 | **Android 10+**（minSdk 29，targetSdk 36），arm64-v8a |
-| GPU | **Adreno**。内置 Turnip 只支持 Adreno（本机实测 Adreno 650；Mali / PowerVR 用不了） |
+| GPU | **Adreno 或 Mali 都能跑**（实测：Adreno 650 / Adreno 830 / Mali-G68）。APK 内置的 Turnip 只适用于 Adreno —— 系统驱动停在 Vulkan 1.1 的 Adreno 设备用它；**Mali 走系统驱动，不需要 Turnip**（天玑 900 / Mali-G68 / Vulkan 1.1.177 实测 30 fps，掌机 720p 可 60）。PowerVR / Xclipse 未实测 |
 | 存储 | 数据包 **3.97 GiB / 4.27 GB**（约 5,200 个文件）；应用内导入时 ZIP 本身也在机内，合计需 **约 8.6 GB** 空闲 |
 | 内存 | 建议 6 GB 以上（实测游戏堆 3.14 GB、堆区 3.25 GB） |
 | root | **不需要**（驱动随 APK，应用内加载） |
 
-> 上表与后文的时间、性能数字，除标注「估算」外，都在 OPPO Pad（OPD2101 / 骁龙 870 / Adreno 650 / Android 15）上实测。
+> 上表与后文的时间、性能数字，除标注「估算」外，都在真机上实测过：OPPO Pad（OPD2101 / 骁龙 870 / Adreno 650 / Android 15）、红米（骁龙 8 Elite 级 / Adreno 830）、荣耀 Play5 活力版（天玑 900 / Mali-G68 / Android 12）。
 
 
 ## 安装
@@ -146,6 +146,7 @@ out/TheGreatAceAttorneyChronicles-data/      ← 3.97 GiB（4.27 GB），约 5,2
 那样只能吃系统驱动。原厂驱动在这台机器上实测是 `Adreno (TM) 650, Vulkan 1.1.128, driver 512.502.0`，
 启动即 `FATAL [vk] the device has neither dynamic rendering nor imageless ...` 并退出——移植按 Vulkan 1.3 选设备（源码里 `apiVersion >= VK_API_VERSION_1_3`）。
 所以要么刷系统级 Turnip，要么把驱动打进 APK（下面这条）。
+**Mali 设备不受这条影响**：系统驱动本来就满足要求（Mali-G68 报 Vulkan 1.1.177 且带 imageless framebuffer），不带驱动的 APK 在 Mali 上照样跑，只是少了 Adreno 那份 Turnip。
 Turnip 驱动可以从 **本仓库 Release 的 APK 里取**：
 
 ```bash
@@ -253,7 +254,7 @@ py -m porter port /path/to/game-folder -o out -k /path/to/prod.keys --experiment
     --vulkan-driver path/to/vulkan.ad07xx.so --progress lines
 ```
 
-- **不带 `--vulkan-driver`**：APK 只有 3.96 MB、没有内置驱动。原厂 Adreno 实测 `Vulkan 1.1.128`，启动即 `FATAL [vk] the device has neither dynamic rendering nor imageless ...` 退出
+- **不带 `--vulkan-driver`**（只对 Adreno 有意义；Mali 用系统驱动，可以不带）：APK 只有 3.96 MB、没有内置驱动。原厂 Adreno 实测 `Vulkan 1.1.128`，启动即 `FATAL [vk] the device has neither dynamic rendering nor imageless ...` 退出
 - 驱动从哪来：本仓库 Release 的 APK 里解出 `lib/arm64-v8a/libsysmem_vulkan.ad07xx.so`（16.36 MB）
 - 忘了设 `JAVA_HOME` → `d8.bat exit code 1 / JAVA_HOME is not set`
 
