@@ -39,7 +39,7 @@
 
 | 设备 | GPU | 结论 |
 |---|---|---|
-| 红米（骁龙 8 Elite 级） | Adreno 830 / Vulkan 1.3.284 | **60 fps 满帧**（frame p50 16.67 ms，GPU 仅 1.99 ms） |
+| 红米（骁龙 8 Elite 级） | Adreno 830 / Vulkan 1.3.284 | **60 fps 满帧**：底座 1080p 第一章实机 frame p50 16.67 / p95 18.20 ms，GPU 3.0 ms，7 800 帧只掉 1 帧 |
 | OPPO Pad | Adreno 650 / 需 Turnip 1.3 | **掌机 720p 满 60**；底座 1080p 约 50 fps（GPU 17.1 ms，差 0.4 ms） |
 | 荣耀 Play5 活力版 | Mali-G68 (天玑900) / Vulkan 1.1 | 30 fps 满帧（GPU 27 ms 是物理上限）；开 60 模式后菜单约 50 fps |
 
