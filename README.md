@@ -6,7 +6,7 @@
 
 *Native Android recompilation port of The Great Ace Attorney Chronicles (Switch), powered by [nx2Android](https://github.com/shirai91/nx2android).*
 
-[![Latest Release](https://img.shields.io/github/v/release/qzj112223/TGAAC-Android?label=Release&color=blue)](../../releases/tag/v1.4.0)
+[![Latest Release](https://img.shields.io/github/v/release/qzj112223/TGAAC-Android?label=Release&color=blue)](../../releases/tag/v1.4.1)
 [![Platform](https://img.shields.io/badge/Android-10%2B%20%7C%20arm64--v8a-3DDC84?logo=android&logoColor=white)](#环境要求与兼容性)
 [![Upstream](https://img.shields.io/badge/Toolchain-nx2Android%20(MIT)-black?logo=github)](https://github.com/shirai91/nx2android)
 [![Issues](https://img.shields.io/github/issues/qzj112223/TGAAC-Android?label=Issues)](https://github.com/qzj112223/TGAAC-Android/issues)
@@ -20,7 +20,7 @@
 
 > 🎉 **致谢上游 [nx2Android](https://github.com/shirai91/nx2android)** —— 本移植完全由其开源的 `porter` 工具链（MIT）生成：将 Switch 的 ARM64 代码静态重编译为原生程序，并提供 Horizon 系统服务与 Maxwell GPU 的 Vulkan 兼容层，让「自己 dump、自己生成、自己玩」成为可能。
 
-> **最新版 [v1.4.0](../../releases/tag/v1.4.0)**：新增「**画面填充**」—— 暂停菜单「游戏」页签可在线切换 **黑边 / 铺满 / 拉伸** 三档，铺满与拉伸会一并延伸进屏幕刘海区，2.2:1 一类宽屏手机上的两侧黑边就此消失（默认仍是黑边）；同时把「触控输入」放回「手柄」页签。详见 [CHANGELOG.md](CHANGELOG.md)。
+> **最新版 [v1.4.1](../../releases/tag/v1.4.1)**：没有新功能的一版 —— 并入上游 #554 / #642 / #568 / #255 / #583，「触控输入」移到「手柄」页签、紧挨「显示手柄」，并修正 DM_TOUCH=1 开机时菜单与实际不一致的小问题。详见 [CHANGELOG.md](CHANGELOG.md)。
 
 ---
 
@@ -60,7 +60,7 @@
 | 全屏 + 60 帧覆盖层（掌机 720p） | 暂停菜单 ·「游戏」页签 |
 | :---: | :---: |
 | ![全屏 60 帧](docs/screenshots/01_fps60_fullscreen.jpg) | ![游戏页签](docs/screenshots/02_menu_game_tab.jpg) |
-| **暂停菜单 ·「手柄」页签（触控输入）** | **默认「黑边」模式（未启用画面填充）** |
+| **暂停菜单 ·「手柄」页签（触控输入在「显示手柄」下面）** | **默认「黑边」模式（未启用画面填充）** |
 | ![手柄页签](docs/screenshots/03_menu_gamepad_tab.jpg) | ![默认黑边](docs/screenshots/04_letterbox_default.jpg) |
 
 ---
